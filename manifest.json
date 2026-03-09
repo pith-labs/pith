@@ -32,7 +32,7 @@
         "default": "Ctrl+Shift+L",
         "mac": "Command+Shift+L"
       },
-      "description": "Toggle LENS on/off"
+      "description": "Toggle Pith on/off"
     }
   }
 }

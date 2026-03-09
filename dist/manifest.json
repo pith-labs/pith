@@ -13,7 +13,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/content.ts-loader-BRb-mMzg.js"
+        "assets/content.ts-loader-icYIAMBi.js"
       ],
       "matches": [
         "https://chatgpt.com/*",
@@ -34,7 +34,7 @@
         "default": "Ctrl+Shift+L",
         "mac": "Command+Shift+L"
       },
-      "description": "Toggle LENS on/off"
+      "description": "Toggle Pith on/off"
     }
   },
   "web_accessible_resources": [
@@ -50,8 +50,8 @@
         "https://you.com/*"
       ],
       "resources": [
-        "assets/LensEngine-Cf2D1X_8.js",
-        "assets/content.ts-BnyJXLyV.js"
+        "assets/PithEngine-kcl_WFO0.js",
+        "assets/content.ts-BqP7_Lj1.js"
       ],
       "use_dynamic_url": false
     }

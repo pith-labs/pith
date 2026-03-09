@@ -1,4 +1,4 @@
-export class LensEngine {
+export class PithEngine {
   // ═══════════════════════════════════════════════════
   // MINIMAL CONFIG (domain config, not language data)
   // ═══════════════════════════════════════════════════
@@ -51,13 +51,13 @@ export class LensEngine {
 
   public optimize(text: string): { output: string; noiseRemoved: number } {
     try {
-      if (!text.trim()) return { output: '[LENS: No meaningful data found]', noiseRemoved: 0 };
+      if (!text.trim()) return { output: '[PITH: No meaningful data found]', noiseRemoved: 0 };
 
       if (this.isQuery(text)) return this.queryPipeline(text);
       return this.compressPipeline(text);
 
     } catch (error) {
-      console.error('LENS Engine Error:', error);
+      console.error('Pith Engine Error:', error);
       return { output: text, noiseRemoved: 0 };
     }
   }
@@ -128,7 +128,7 @@ export class LensEngine {
 
     // 4. Verb penalty — detected by suffix morphology, not word lists
     //    Only for words >= 6 chars (avoids false positives: lugar, solar, bar)
-    if (clean.length >= 6 && LensEngine.VERB_ENDING.test(clean.toLowerCase())) score -= 3;
+    if (clean.length >= 6 && PithEngine.VERB_ENDING.test(clean.toLowerCase())) score -= 3;
 
     // 5. Position bonus — first word in a line is often key context
     //    But NOT for sentence-start words (they're already at a natural advantage)
@@ -154,7 +154,7 @@ export class LensEngine {
     // Layer 3: Score-based filtering (line by line, light threshold)
     const freq = this.buildFreqMap(patterned);
     const totalWords = patterned.split(/\s+/).length;
-    const filtered = this.scoreFilterLines(patterned, freq, totalWords, LensEngine.COMPRESS_THRESHOLD);
+    const filtered = this.scoreFilterLines(patterned, freq, totalWords, PithEngine.COMPRESS_THRESHOLD);
 
     // Layer 4: Abbreviate long words
     const abbreviated = this.abbreviate(filtered);
@@ -184,7 +184,7 @@ export class LensEngine {
     // Detect intent tag
     const lower = workText.toLowerCase();
     let tag = '';
-    for (const [key, val] of LensEngine.INTENT_TAGS.entries()) {
+    for (const [key, val] of PithEngine.INTENT_TAGS.entries()) {
       if (lower.includes(key)) { tag = `[${val}]`; break; }
     }
 
@@ -216,7 +216,7 @@ export class LensEngine {
       if (!clean) continue;
 
       // Intent trigger words are consumed by the tag
-      if (LensEngine.INTENT_TAGS.has(clean.toLowerCase())) continue;
+      if (PithEngine.INTENT_TAGS.has(clean.toLowerCase())) continue;
 
       // Number + unit fusion: "5 dias" → "5d"
       if (/^\d+$/.test(clean) && i + 1 < words.length) {
@@ -230,7 +230,7 @@ export class LensEngine {
 
       const isSentenceStart = sentenceStarts.has(i);
       const score = this.scoreWord(words[i], freq, totalWords, i === 0, isSentenceStart);
-      if (score >= LensEngine.QUERY_THRESHOLD) {
+      if (score >= PithEngine.QUERY_THRESHOLD) {
         survivors.push({ word: clean, score, origIdx: i });
       }
     }
@@ -270,7 +270,7 @@ export class LensEngine {
       }
 
       // Adjective suffix → ?attribute
-      if (LensEngine.ADJECTIVE_SUFFIX.test(item.word.toLowerCase())) {
+      if (PithEngine.ADJECTIVE_SUFFIX.test(item.word.toLowerCase())) {
         attrs.push('?' + item.word.toLowerCase());
         continue;
       }
@@ -413,7 +413,7 @@ export class LensEngine {
   // Abbreviate known long words
   private abbreviate(text: string): string {
     return text.replace(/\b[a-zA-ZÀ-ÿ]{7,}\b/g, word => {
-      return LensEngine.ABBREV.get(word.toLowerCase()) || word;
+      return PithEngine.ABBREV.get(word.toLowerCase()) || word;
     });
   }
 

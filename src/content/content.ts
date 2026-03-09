@@ -1,6 +1,6 @@
-import { LensEngine } from '../core/LensEngine';
+import { PithEngine } from '../core/PithEngine';
 
-const engine = new LensEngine();
+const engine = new PithEngine();
 let lensEnabled = true;
 let responseBoost = true;
 
@@ -18,7 +18,7 @@ if (typeof chrome !== 'undefined' && chrome.storage?.local) {
   chrome.storage.onChanged.addListener((changes) => {
     if (changes.lensEnabled) {
       lensEnabled = changes.lensEnabled.newValue !== false;
-      showBadge(lensEnabled ? 'LENS ON' : 'LENS OFF', lensEnabled ? '#10b981' : '#ef4444');
+      showBadge(lensEnabled ? 'PITH ON' : 'PITH OFF', lensEnabled ? '#10b981' : '#ef4444');
     }
     if (changes.responseBoost) {
       responseBoost = changes.responseBoost.newValue !== false;
@@ -34,7 +34,7 @@ document.addEventListener('keydown', (e) => {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
       chrome.storage.local.set({ lensEnabled });
     }
-    showBadge(lensEnabled ? 'LENS ON' : 'LENS OFF', lensEnabled ? '#10b981' : '#ef4444');
+    showBadge(lensEnabled ? 'PITH ON' : 'PITH OFF', lensEnabled ? '#10b981' : '#ef4444');
   }
 });
 
@@ -117,7 +117,7 @@ document.addEventListener('keydown', (e) => {
     (syntheticKeyUp as any).__lens = true;
     el.dispatchEvent(syntheticKeyUp);
 
-    showBadge(`-${noiseRemoved}% LENS`, '#10b981');
+    showBadge(`-${noiseRemoved}% PITH`, '#10b981');
   });
 
 }, true); // capture phase — runs before platform handlers
@@ -174,7 +174,7 @@ document.addEventListener('click', (e) => {
     const syntheticClick = new MouseEvent('click', { bubbles: true, cancelable: true });
     (syntheticClick as any).__lens = true;
     button.dispatchEvent(syntheticClick);
-    showBadge(`-${noiseRemoved}% LENS`, '#10b981');
+    showBadge(`-${noiseRemoved}% PITH`, '#10b981');
   });
 
 }, true);
@@ -249,11 +249,11 @@ function saveTokens(tokens: number) {
 // Show a transient badge notification
 function showBadge(text: string, color: string) {
   // Remove existing badge
-  const existing = document.getElementById('lens-badge');
+  const existing = document.getElementById('pith-badge');
   if (existing) existing.remove();
 
   const badge = document.createElement('div');
-  badge.id = 'lens-badge';
+  badge.id = 'pith-badge';
   badge.textContent = text;
   badge.style.cssText = `
     position: fixed;
@@ -292,4 +292,4 @@ function showBadge(text: string, color: string) {
   setTimeout(() => badge.remove(), 2000);
 }
 
-console.log('[LENS] Content script loaded — Ctrl+Shift+L to toggle');
+console.log('[PITH] Content script loaded — Ctrl+Shift+L to toggle');

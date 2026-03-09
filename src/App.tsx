@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Copy, TerminalSquare, Zap } from 'lucide-react';
-import { LensEngine } from './core/LensEngine';
+import { PithEngine } from './core/PithEngine';
 
-const engine = new LensEngine();
+const engine = new PithEngine();
 
 export default function App() {
   const [input, setInput] = useState('');
@@ -10,18 +10,18 @@ export default function App() {
   const [savings, setSavings] = useState({ distilledTokens: 0, dollars: 0 });
   const [massaGorda, setMassaGorda] = useState(0);
   const [isDistilling, setIsDistilling] = useState(false);
-  const [lensEnabled, setLensEnabled] = useState(true);
+  const [pithEnabled, setLensEnabled] = useState(true);
   const [responseBoost, setResponseBoost] = useState(true);
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get(['distilledTokens', 'lensEnabled', 'responseBoost'], (result) => {
+      chrome.storage.local.get(['distilledTokens', 'pithEnabled', 'responseBoost'], (result) => {
         const tokens = result.distilledTokens || 0;
         setSavings({
           distilledTokens: tokens,
           dollars: (tokens / 1_000_000) * 15
         });
-        setLensEnabled(result.lensEnabled !== false);
+        setLensEnabled(result.pithEnabled !== false);
         setResponseBoost(result.responseBoost !== false);
       });
     }
@@ -81,7 +81,7 @@ export default function App() {
       <header className="flex justify-between items-center mb-4 border-b border-slate-800 pb-4">
         <div className="flex items-center gap-2">
           <TerminalSquare className="text-emerald-400" />
-          <h1 className="text-xl font-bold tracking-tight">LENS v3</h1>
+          <h1 className="text-xl font-bold tracking-tight">PITH v3</h1>
         </div>
         <div className="flex flex-col items-end gap-1 text-sm font-mono">
           <span className="text-emerald-400 font-bold">{savings.distilledTokens.toLocaleString()} Tokens Destilados</span>
@@ -103,7 +103,7 @@ export default function App() {
         <div className="flex flex-col gap-1 mt-2">
           <div className="flex justify-between items-end">
             <label className="text-sm font-semibold text-slate-300 flex items-center gap-3">
-              Linguagem de Máquina (LENS)
+              Linguagem de Máquina (PITH)
               <span className={`text-xs font-mono text-emerald-400 flex items-center gap-1 transition-opacity duration-300 ${isDistilling ? 'opacity-100 animate-pulse' : 'opacity-0'}`}>
                 <Zap size={14} className="fill-emerald-400" />
                 Destilando...
@@ -134,15 +134,15 @@ export default function App() {
           <span className="text-sm text-slate-300">Modo Invisível (Auto-compress)</span>
           <button
             onClick={() => {
-              const next = !lensEnabled;
+              const next = !pithEnabled;
               setLensEnabled(next);
               if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-                chrome.storage.local.set({ lensEnabled: next });
+                chrome.storage.local.set({ pithEnabled: next });
               }
             }}
-            className={`w-10 h-5 rounded-full transition-colors relative ${lensEnabled ? 'bg-emerald-500' : 'bg-slate-600'}`}
+            className={`w-10 h-5 rounded-full transition-colors relative ${pithEnabled ? 'bg-emerald-500' : 'bg-slate-600'}`}
           >
-            <span className={`block w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${lensEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            <span className={`block w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${pithEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
           </button>
         </div>
         <div className="flex items-center justify-between">
@@ -171,7 +171,7 @@ export default function App() {
           className="px-4 py-3 rounded-lg flex items-center justify-center gap-2 font-bold transition-all bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
           title="Copiar Sistema Zero-G Integrado"
         >
-          Copy LENS Prompt
+          Copy PITH Prompt
         </button>
         <button 
           onClick={copyPrompt}
