@@ -4,8 +4,9 @@ const engine = new PithEngine();
 let lensEnabled = true;
 let responseBoost = true;
 
-// Concise response instruction — ~10 tokens that save hundreds on output
-const RESPONSE_HINT = '\n[Be concise. No filler. Direct answer only.]';
+// Concise response instructions — ~15 tokens that save hundreds on output
+const RESPONSE_HINT_QUERY = '\n[Answer in 1-3 sentences. No intro/outro. No "Great question". Skip what I already know.]';
+const RESPONSE_HINT_COMPRESS = '\n[Be concise. No filler. No recap of my input. Direct answer only. Bullets over paragraphs.]';
 
 // Load saved state
 if (typeof chrome !== 'undefined' && chrome.storage?.local) {
@@ -70,13 +71,14 @@ document.addEventListener('keydown', (e) => {
   if (isCodeHeavy(text)) return;
 
   // Compress
-  const { output, noiseRemoved } = engine.optimize(text);
+  const { output, noiseRemoved, isQuery } = engine.optimize(text);
 
   // Not worth compressing (< 5% reduction)
   if (noiseRemoved < 5) return;
 
-  // Append response boost hint if enabled
-  const finalOutput = responseBoost ? output + RESPONSE_HINT : output;
+  // Append response boost hint if enabled (contextual per mode)
+  const hint = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
+  const finalOutput = responseBoost ? output + hint : output;
 
   // Stop original submit
   e.preventDefault();
@@ -150,11 +152,12 @@ document.addEventListener('click', (e) => {
   if (!text.trim() || text.length < 30) return;
   if (isCodeHeavy(text)) return;
 
-  const { output, noiseRemoved } = engine.optimize(text);
+  const { output, noiseRemoved, isQuery } = engine.optimize(text);
   if (noiseRemoved < 5) return;
 
-  // Append response boost hint if enabled
-  const finalOutput = responseBoost ? output + RESPONSE_HINT : output;
+  // Append response boost hint if enabled (contextual per mode)
+  const hint2 = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
+  const finalOutput = responseBoost ? output + hint2 : output;
 
   // Replace text (don't block the click — just change content before it sends)
   if (isTextarea) {

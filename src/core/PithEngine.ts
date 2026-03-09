@@ -49,16 +49,17 @@ export class PithEngine {
   // PUBLIC API
   // ═══════════════════════════════════════════════════
 
-  public optimize(text: string): { output: string; noiseRemoved: number } {
+  public optimize(text: string): { output: string; noiseRemoved: number; isQuery: boolean } {
     try {
-      if (!text.trim()) return { output: '[PITH: No meaningful data found]', noiseRemoved: 0 };
+      if (!text.trim()) return { output: '[PITH: No meaningful data found]', noiseRemoved: 0, isQuery: false };
 
-      if (this.isQuery(text)) return this.queryPipeline(text);
-      return this.compressPipeline(text);
+      const query = this.isQuery(text);
+      const result = query ? this.queryPipeline(text) : this.compressPipeline(text);
+      return { ...result, isQuery: query };
 
     } catch (error) {
       console.error('Pith Engine Error:', error);
-      return { output: text, noiseRemoved: 0 };
+      return { output: text, noiseRemoved: 0, isQuery: false };
     }
   }
 
