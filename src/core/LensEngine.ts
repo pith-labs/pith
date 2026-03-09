@@ -1,105 +1,49 @@
 export class LensEngine {
-  // ─── Intent detection -> [tag] (Query mode only) ───
-  private static readonly intentMap = new Map<string, string>([
-    ['como', 'ex'], ['explicar', 'ex'], ['explique', 'ex'], ['receita', 'ex'],
-    ['analisar', 'an'], ['analise', 'an'], ['mostrar', 'an'],
-    ['otimizar', 'op'], ['melhorar', 'op'], ['melhore', 'op'],
-    ['ideia', 'id'], ['ideias', 'id'], ['dicas', 'id'], ['sugestão', 'id'],
-    ['estudar', 'st'], ['aprender', 'st'], ['estratégia', 'st'], ['plano', 'st'],
-    ['corrigir', 'fx'], ['erro', 'fx'], ['bug', 'fx'],
-    ['criar', 'gen'], ['gerar', 'gen'],
-    ['resumir', 'sm'], ['resumo', 'sm'],
+  // ═══════════════════════════════════════════════════
+  // MINIMAL CONFIG (domain config, not language data)
+  // ═══════════════════════════════════════════════════
+
+  // Intent tags for query symbolic mode
+  private static readonly INTENT_TAGS = new Map<string, string>([
+    ['como', 'ex'], ['explicar', 'ex'], ['explique', 'ex'],
+    ['how', 'ex'], ['explain', 'ex'], ['what', 'ex'],
+    ['analisar', 'an'], ['analyze', 'an'], ['mostrar', 'an'],
+    ['otimizar', 'op'], ['optimize', 'op'], ['melhorar', 'op'], ['improve', 'op'],
+    ['ideia', 'id'], ['idea', 'id'], ['suggest', 'id'], ['dicas', 'id'],
+    ['criar', 'gen'], ['create', 'gen'], ['gerar', 'gen'], ['generate', 'gen'],
+    ['corrigir', 'fx'], ['fix', 'fx'], ['bug', 'fx'], ['erro', 'fx'],
+    ['resumir', 'sm'], ['summarize', 'sm'],
     ['task', 'tk'], ['tarefa', 'tk'],
+    ['estudar', 'st'], ['learn', 'st'], ['plano', 'st'],
   ]);
 
-  // ─── Blacklist (shared by both modes) ───
-  private static readonly blacklist = new Set([
-    // PT linking verbs / filler
-    'faço', 'como', 'ser', 'existe', 'existem', 'veja', 'sentindo', 'queria',
-    'pode', 'estou', 'me', 'o', 'que', 'eu', 'para', 'no', 'na', 'do', 'da',
-    'de', 'em', 'um', 'uma', 'os', 'as', 'a', 'é', 'são', 'foi', 'era',
-    'com', 'por', 'dos', 'das', 'nos', 'nas', 'ao', 'aos', 'às',
-    'se', 'te', 'lhe', 'ele', 'ela', 'eles', 'elas', 'nós', 'você',
-    'esse', 'essa', 'este', 'esta', 'isso', 'isto', 'aquele', 'aquela',
-    'meu', 'minha', 'seu', 'sua', 'nosso', 'nossa', 'teu', 'tua',
-    'mais', 'muito', 'bem', 'já', 'ainda', 'também', 'só', 'agora',
-    'então', 'mas', 'ou', 'e', 'nem', 'qual', 'quais',
-    'ter', 'estar', 'fazer', 'ir', 'vir', 'dar', 'ver', 'saber',
-    'quero', 'gostaria', 'poderia', 'devo', 'preciso', 'consigo',
-    'olá', 'oi', 'por favor', 'obrigado', 'obrigada',
-    'sobre', 'entre', 'até', 'desde', 'após', 'sem', 'sob',
-    'tudo', 'nada', 'algo', 'alguém', 'ninguém', 'cada',
-    'aqui', 'ali', 'lá', 'onde', 'quando', 'porque', 'pois',
-    'vamos', 'sou', 'fosse', 'posso', 'usar', 'algumas', 'meio',
-    'alguma', 'deveria', 'quereria', 'não', 'tão', 'quanto', 'durante',
-    'ajudar', 'conseguir', 'focando',
-    // EN linking/filler
-    'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-    'should', 'may', 'might', 'shall', 'can', 'must',
-    'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her',
-    'us', 'them', 'my', 'your', 'his', 'its', 'our', 'their',
-    'this', 'that', 'these', 'those', 'what', 'which', 'who', 'whom',
-    'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'about',
-    'into', 'through', 'during', 'before', 'after', 'above', 'below',
-    'and', 'but', 'or', 'nor', 'not', 'so', 'yet', 'both', 'either',
-    'how', 'get', 'got', 'just', 'also', 'very', 'really', 'please',
-    'want', 'need', 'like', 'know', 'think', 'make', 'take',
-    'there', 'here', 'where', 'when', 'why', 'if', 'then',
-    'some', 'any', 'all', 'each', 'every', 'no', 'many', 'much',
-    'help', 'focusing',
+  // Compact abbreviations for long words (readability optimization)
+  private static readonly ABBREV = new Map<string, string>([
+    ['categories', 'cats'], ['categorias', 'cats'],
+    ['products', 'prods'], ['produtos', 'prods'],
+    ['configuration', 'config'], ['configuração', 'config'], ['configuracao', 'config'],
+    ['development', 'dev'], ['desenvolvimento', 'dev'],
+    ['documentation', 'docs'], ['documentação', 'docs'], ['documentacao', 'docs'],
+    ['application', 'app'], ['aplicação', 'app'], ['aplicacao', 'app'],
+    ['implementation', 'impl'], ['implementação', 'impl'], ['implementacao', 'impl'],
+    ['management', 'mgmt'], ['gerenciamento', 'mgmt'],
+    ['information', 'info'], ['informação', 'info'], ['informacao', 'info'],
+    ['authentication', 'auth'], ['autenticação', 'auth'], ['autenticacao', 'auth'],
+    ['environment', 'env'], ['ambiente', 'env'],
+    ['repository', 'repo'], ['repositório', 'repo'], ['repositorio', 'repo'],
+    ['permission', 'perm'], ['permissão', 'perm'],
+    ['description', 'desc'], ['descrição', 'desc'],
+    ['responsible', 'resp'], ['responsável', 'resp'],
+    ['available', 'avail'], ['disponível', 'avail'],
   ]);
 
-  // ─── Document-mode: extra filler stripped per-line ───
-  private static readonly docFiller = new Set([
-    // PT connective tissue that's safe to remove inside structured docs
-    'será', 'serão', 'sejam', 'seja', 'sendo', 'foram', 'seria',
-    'terá', 'terão', 'tendo', 'possui', 'possuem', 'possui',
-    'deverá', 'deverão', 'deve', 'devem',
-    'pode', 'podem', 'poderá', 'poderão',
-    'existe', 'existem', 'existir',
-    'apenas', 'porém', 'contudo', 'entretanto',
-    'dessa', 'desse', 'dessas', 'desses', 'nessa', 'nesse',
-    'pela', 'pelo', 'pelas', 'pelos',
-    'assim', 'conforme', 'segundo',
-    'sim', 'não',
-    // EN doc filler
-    'however', 'therefore', 'furthermore', 'moreover', 'thus',
-    'respectively', 'additionally', 'specifically',
-  ]);
+  // Scoring thresholds
+  private static readonly QUERY_THRESHOLD = 5;
+  private static readonly COMPRESS_THRESHOLD = 4;
 
-  // ─── Query-mode dictionaries ───
-  private static readonly nounTranslate = new Map<string, string>([
-    ['roteiro', 'itinerary'], ['viagem', 'travel'], ['dias', 'd'],
-    ['templos', 'temples'], ['templo', 'temple'],
-    ['eletrônicos', 'electronics'], ['eletrônico', 'electronic'],
-    ['espada', 'sword'], ['receita', 'recipe'], ['bolo', 'cake'],
-    ['código', 'code'], ['script', 'script'], ['jogo', 'game'],
-    ['arquivo', 'file'], ['sistema', 'system'], ['projeto', 'project'],
-    ['problema', 'problem'], ['solução', 'solution'], ['resultado', 'result'],
-    ['carro', 'car'], ['casa', 'house'], ['comida', 'food'],
-    ['música', 'music'], ['filme', 'movie'], ['livro', 'book'],
-    ['logística', 'logistics'], ['tutorial', 'tutorial'],
-    ['rescisão', 'termination'], ['contrato', 'contract'],
-  ]);
-
-  private static readonly outputTypes = new Set([
-    'logistics', 'logística', 'tutorial', 'prático', 'prática',
-    'resumo', 'summary', 'comparison', 'comparação', 'análise',
-    'guide', 'guia', 'walkthrough', 'passo-a-passo', 'checklist',
-  ]);
-
-  private static readonly explicitAttrs = new Set([
-    'rápido', 'barato', 'caro', 'urgente', 'gourmet', 'forte', 'fraco',
-    'grande', 'pequeno', 'novo', 'velho', 'bom', 'mau', 'lendário', 'lendária',
-    'fofinho', 'bonito', 'feio', 'simples', 'complexo', 'fácil', 'difícil',
-    'fast', 'cheap', 'expensive', 'urgent', 'strong', 'weak', 'legendary',
-    'big', 'small', 'new', 'old', 'good', 'bad', 'simple', 'complex',
-    'balanced', 'equilibrado',
-  ]);
-
-  private static readonly attrSuffixPt = /^.+(ário|ária|oso|osa|ivo|iva|ável|ível|mente|inho|inha|ante|ente|udo|uda)$/i;
-  private static readonly attrSuffixEn = /^.+(ary|ous|ive|able|ible|ful|less|al|ial|ic|ical|ly)$/i;
+  // Morphological patterns (algorithmic, not word lists)
+  private static readonly ADJECTIVE_SUFFIX = /(?:ário|ária|oso|osa|ivo|iva|ável|ível|inho|inha|ante|ente|udo|uda|ário|ária|ary|ous|ive|able|ible|ful|less|ical|ial)$/i;
+  private static readonly VERB_ENDING = /(?:[aei]r|[aei]ndo|[aei]ram|[aei]va[ms]?|[aei]rá|[aei]rão|[aei]sse[ms]?)$/i;
 
   // ═══════════════════════════════════════════════════
   // PUBLIC API
@@ -109,11 +53,8 @@ export class LensEngine {
     try {
       if (!text.trim()) return { output: '[LENS: No meaningful data found]', noiseRemoved: 0 };
 
-      // Mode detection: document vs query
-      if (this.isDocument(text)) {
-        return this.compressDocument(text);
-      }
-      return this.extractQuery(text);
+      if (this.isQuery(text)) return this.queryPipeline(text);
+      return this.compressPipeline(text);
 
     } catch (error) {
       console.error('LENS Engine Error:', error);
@@ -121,310 +62,403 @@ export class LensEngine {
     }
   }
 
+  public compressCode(code: string): string {
+    return code;
+  }
+
   // ═══════════════════════════════════════════════════
   // MODE DETECTION
   // ═══════════════════════════════════════════════════
 
-  private isDocument(text: string): boolean {
-    const lines = text.split('\n');
-    if (lines.length < 4) return false;
-
-    let structureSignals = 0;
-    // Has numbered lists
-    if (/^\s*\d+\.\s/m.test(text)) structureSignals++;
-    // Has bullet points or dashes
-    if (/^\s*[-•–]\s/m.test(text)) structureSignals++;
-    // Has headers (lines ending with no period, followed by content)
-    if (/^[A-ZÀ-Ý#].{3,80}$/m.test(text)) structureSignals++;
-    // Has multiple paragraphs
-    if ((text.match(/\n\s*\n/g) || []).length >= 2) structureSignals++;
-    // Word count > 80
-    if (text.split(/\s+/).length > 80) structureSignals++;
-
-    return structureSignals >= 2;
+  private isQuery(text: string): boolean {
+    if (text.split(/\s+/).length > 40) return false;
+    if (text.split('\n').filter(l => l.trim()).length > 3) return false;
+    if (/```/.test(text)) return false;
+    if (/^\s*\d+\.\s/m.test(text)) return false;
+    if (/^\s*[-•–]\s/m.test(text)) return false;
+    return true;
   }
 
   // ═══════════════════════════════════════════════════
-  // DOCUMENT MODE - Structural compression
-  // Preserves hierarchy, strips filler, keeps meaning
+  // SCORING ENGINE (core intelligence — zero word lists)
   // ═══════════════════════════════════════════════════
 
-  private compressDocument(text: string): { output: string; noiseRemoved: number } {
+  private buildFreqMap(text: string): Map<string, number> {
+    const freq = new Map<string, number>();
+    for (const w of text.toLowerCase().split(/\s+/)) {
+      const clean = w.replace(/[^a-zA-ZÀ-ÿ]/g, '');
+      if (clean) freq.set(clean, (freq.get(clean) || 0) + 1);
+    }
+    return freq;
+  }
+
+  private scoreWord(
+    word: string,
+    freq: Map<string, number>,
+    totalWords: number,
+    isFirstInLine: boolean,
+    isSentenceStart: boolean = false,
+  ): number {
+    // Always preserve tokens with symbols/digits (technical content)
+    if (/\d/.test(word)) return 100;
+    if (/[^a-zA-ZÀ-ÿ\s.,;:!?'"]/.test(word)) return 100;
+
+    const clean = word.replace(/[^a-zA-ZÀ-ÿ]/g, '');
+    if (!clean) return 0;
+
+    let score = 0;
+
+    // 1. Length signal — longer words carry more semantic weight
+    score += Math.min(clean.length, 8);
+
+    // 2. Case signals — capitalization indicates entities/importance
+    //    Sentence-start words get NO cap bonus (capitalized by grammar, not meaning)
+    //    ALLCAPS always gets bonus (acronyms: BFF, VIP, PY)
+    if (/^[A-Z][A-Z0-9]+$/.test(clean)) {
+      score += 8; // Acronym — always important
+    } else if (/^[A-ZÀ-Ý]/.test(clean) && !isSentenceStart) {
+      score += 5; // Mid-sentence capitalization = proper noun/entity
+    }
+
+    // 3. Frequency penalty — ubiquitous words are likely structural filler
+    if (totalWords > 30) {
+      const ratio = (freq.get(clean.toLowerCase()) || 0) / totalWords;
+      if (ratio > 0.02) score -= Math.min(Math.floor(ratio * 60), 6);
+    }
+
+    // 4. Verb penalty — detected by suffix morphology, not word lists
+    //    Only for words >= 6 chars (avoids false positives: lugar, solar, bar)
+    if (clean.length >= 6 && LensEngine.VERB_ENDING.test(clean.toLowerCase())) score -= 3;
+
+    // 5. Position bonus — first word in a line is often key context
+    //    But NOT for sentence-start words (they're already at a natural advantage)
+    if (isFirstInLine && !isSentenceStart) score += 2;
+
+    return score;
+  }
+
+  // ═══════════════════════════════════════════════════
+  // PIPELINE 1: COMPRESSION (universal, any text type)
+  // Preserve → Pattern → Score+Filter → Abbreviate → Clean
+  // ═══════════════════════════════════════════════════
+
+  private compressPipeline(text: string): { output: string; noiseRemoved: number } {
     const originalWordCount = text.split(/\s+/).length;
 
-    // Preserve code blocks
-    const codeBlockRegex = /```[\s\S]*?```/g;
-    const codeBlocks = text.match(codeBlockRegex);
-    let workText = text.replace(codeBlockRegex, '\u0000CODE\u0000');
+    // Layer 1: Preserve untouchable tokens (code, URLs, brackets, key:value)
+    const { text: preserved, map: preserveMap } = this.preserveLayer(text);
 
-    const lines = workText.split('\n');
-    const compressed: string[] = [];
+    // Layer 2: Pattern transforms (slash-groups → [A|B|C])
+    const patterned = this.patternLayer(preserved);
 
-    for (const line of lines) {
-      const trimmed = line.trim();
+    // Layer 3: Score-based filtering (line by line, light threshold)
+    const freq = this.buildFreqMap(patterned);
+    const totalWords = patterned.split(/\s+/).length;
+    const filtered = this.scoreFilterLines(patterned, freq, totalWords, LensEngine.COMPRESS_THRESHOLD);
 
-      // Preserve empty lines (structure separators)
-      if (!trimmed) {
-        // Avoid consecutive blank lines
-        if (compressed.length > 0 && compressed[compressed.length - 1] !== '') {
-          compressed.push('');
-        }
-        continue;
-      }
+    // Layer 4: Abbreviate long words
+    const abbreviated = this.abbreviate(filtered);
 
-      // Detect line type
-      const isHeader = /^#{1,6}\s/.test(trimmed) ||
-                       /^\d+\.\s+[A-ZÀ-Ý]/.test(trimmed) ||
-                       /^[A-ZÀ-Ý][A-ZÀ-Ýa-zà-ÿ\s,–\-&]+$/.test(trimmed);
-      const isBullet = /^[-•–]\s/.test(trimmed) || /^\d+\.\s/.test(trimmed);
+    // Layer 5: Restore placeholders & clean whitespace
+    const final = this.restoreAndClean(abbreviated, preserveMap);
 
-      if (isHeader) {
-        // Headers: keep as-is, they're structural
-        compressed.push(this.compressLine(trimmed, true));
-      } else if (isBullet) {
-        // Bullet items: compress content but keep marker
-        const match = trimmed.match(/^([-•–]\s+|\d+\.\s+)(.*)/);
-        if (match) {
-          const marker = match[1];
-          const content = this.compressLine(match[2], false);
-          if (content) compressed.push(marker + content);
-        } else {
-          compressed.push(this.compressLine(trimmed, false));
-        }
-      } else {
-        // Regular lines: full compression
-        const result = this.compressLine(trimmed, false);
-        if (result) compressed.push(result);
-      }
-    }
+    if (!final.trim()) return { output: text, noiseRemoved: 0 };
 
-    let finalOutput = compressed.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-
-    // Restore code blocks
-    if (codeBlocks) {
-      let blockIdx = 0;
-      finalOutput = finalOutput.replace(/\u0000CODE\u0000/g, () => {
-        return codeBlocks[blockIdx++] || '';
-      });
-    }
-
-    if (!finalOutput) return { output: text, noiseRemoved: 0 };
-
-    const outputWordCount = finalOutput.split(/\s+/).length;
-    const noisePercentage = originalWordCount > 0
+    const outputWordCount = final.split(/\s+/).length;
+    const noise = originalWordCount > 0
       ? Math.max(0, Math.floor(((originalWordCount - outputWordCount) / originalWordCount) * 100))
       : 0;
 
-    return { output: finalOutput, noiseRemoved: noisePercentage };
-  }
-
-  private compressLine(line: string, isHeader: boolean): string {
-    // Headers get light compression - only strip obvious filler
-    if (isHeader) {
-      return line
-        .replace(/\b(Sobre as?|Sobre os?)\b/gi, '')
-        .replace(/\s{2,}/g, ' ')
-        .trim();
-    }
-
-    const words = line.split(/\s+/);
-    const kept: string[] = [];
-
-    for (const word of words) {
-      const clean = word.replace(/^[.,;:]+|[.,;:]+$/g, '');
-      if (!clean) {
-        // Preserve punctuation-only tokens (structural)
-        if (word) kept.push(word);
-        continue;
-      }
-
-      const lower = clean.toLowerCase();
-
-      // Strip blacklist + doc filler
-      if (LensEngine.blacklist.has(lower) || LensEngine.docFiller.has(lower)) continue;
-
-      // Keep everything else (preserves meaning)
-      kept.push(word);
-    }
-
-    return kept.join(' ').replace(/\s{2,}/g, ' ').trim();
+    return { output: final.trim(), noiseRemoved: noise };
   }
 
   // ═══════════════════════════════════════════════════
-  // QUERY MODE - Symbolic token extraction
-  // [tag] !action #niche @entity %output ?attr
+  // PIPELINE 2: QUERY (symbolic token extraction)
+  // [tag] !action #niche @entity ?attr
   // ═══════════════════════════════════════════════════
 
-  private extractQuery(text: string): { output: string; noiseRemoved: number } {
+  private queryPipeline(text: string): { output: string; noiseRemoved: number } {
     const originalWordCount = text.split(/\s+/).length;
+    let workText = text.replace(/[?!.…]+$/g, '').trim();
 
-    // Preserve code blocks
-    const codeBlockRegex = /```[\s\S]*?```/g;
-    const codeBlocks = text.match(codeBlockRegex);
-    let workText = text.replace(codeBlockRegex, '');
-
-    // 1. Detect intent -> [tag]
-    const lowerText = workText.toLowerCase();
+    // Detect intent tag
+    const lower = workText.toLowerCase();
     let tag = '';
-    for (const [key, val] of LensEngine.intentMap.entries()) {
-      if (lowerText.includes(key)) {
-        tag = `[${val}]`;
-        break;
+    for (const [key, val] of LensEngine.INTENT_TAGS.entries()) {
+      if (lower.includes(key)) { tag = `[${val}]`; break; }
+    }
+
+    // Score all words, keep survivors
+    const freq = this.buildFreqMap(workText);
+    const totalWords = workText.split(/\s+/).length;
+    const words = workText.split(/\s+/);
+
+    // Detect sentence-start positions (after . ! ? or index 0)
+    const sentenceStarts = new Set<number>([0]);
+    for (let i = 0; i < words.length; i++) {
+      if (/[.!?]$/.test(words[i]) && i + 1 < words.length) sentenceStarts.add(i + 1);
+    }
+
+    const survivors: { word: string; score: number; origIdx: number }[] = [];
+    const unitMap: Record<string, string> = {
+      'dias': 'd', 'dia': 'd', 'days': 'd', 'day': 'd',
+      'meses': 'm', 'mês': 'm', 'months': 'm', 'month': 'm',
+      'anos': 'y', 'ano': 'y', 'years': 'y', 'year': 'y',
+      'horas': 'h', 'hora': 'h', 'hours': 'h', 'hour': 'h',
+      'minutos': 'min', 'minutes': 'min',
+    };
+    const skipIndices = new Set<number>();
+
+    for (let i = 0; i < words.length; i++) {
+      if (skipIndices.has(i)) continue;
+
+      const clean = words[i].replace(/[^a-zA-ZÀ-ÿ0-9]/g, '');
+      if (!clean) continue;
+
+      // Intent trigger words are consumed by the tag
+      if (LensEngine.INTENT_TAGS.has(clean.toLowerCase())) continue;
+
+      // Number + unit fusion: "5 dias" → "5d"
+      if (/^\d+$/.test(clean) && i + 1 < words.length) {
+        const nextClean = words[i + 1].replace(/[^a-zA-ZÀ-ÿ]/g, '').toLowerCase();
+        if (unitMap[nextClean]) {
+          survivors.push({ word: clean + unitMap[nextClean], score: 100, origIdx: i });
+          skipIndices.add(i + 1);
+          continue;
+        }
+      }
+
+      const isSentenceStart = sentenceStarts.has(i);
+      const score = this.scoreWord(words[i], freq, totalWords, i === 0, isSentenceStart);
+      if (score >= LensEngine.QUERY_THRESHOLD) {
+        survivors.push({ word: clean, score, origIdx: i });
       }
     }
 
-    // 2. Strip trailing human punctuation
-    workText = workText.replace(/[?!.…]+$/g, '').trim();
-
-    // 3. Tokenize
-    const rawTokens = workText.split(/\s+/);
-
-    // 4. Entity Fusion (@) - fuse consecutive proper nouns
-    const fusedTokens: string[] = [];
-    let i = 0;
-    while (i < rawTokens.length) {
-      if (this.isProperNoun(rawTokens[i])) {
-        let fused = rawTokens[i];
-        let j = i + 1;
-        while (j < rawTokens.length && this.isProperNoun(rawTokens[j])) {
-          fused += rawTokens[j];
-          j++;
+    // Normalize sentence-start survivors: lowercase unless ALLCAPS
+    // "Comment" at start → "comment" (grammar cap, not entity)
+    // "BFF" stays "BFF" (acronym)
+    // "Elden" mid-sentence stays "Elden" (true proper noun)
+    for (let si = 0; si < survivors.length; si++) {
+      const w = survivors[si].word;
+      if (sentenceStarts.has(survivors[si].origIdx)) {
+        if (!/^[A-Z][A-Z0-9]+$/.test(w)) {
+          survivors[si] = { ...survivors[si], word: w.toLowerCase() };
         }
-        if (j > i + 1) {
-          fusedTokens.push('@' + fused);
-        } else {
-          fusedTokens.push(rawTokens[i]);
-        }
-        i = j;
-      } else {
-        fusedTokens.push(rawTokens[i]);
-        i++;
       }
     }
 
-    // 5. Classify tokens
+    // Fuse consecutive proper nouns: [Elden, Ring] → [EldenRing]
+    const fused = this.fuseProperNouns(survivors);
+
+    // Classify into symbolic tokens by PATTERN (no word lists)
     let action = '';
     const niches: string[] = [];
     const entities: string[] = [];
-    const outputs: string[] = [];
     const attrs: string[] = [];
     const seen = new Set<string>();
 
-    for (let idx = 0; idx < fusedTokens.length; idx++) {
-      const token = fusedTokens[idx];
+    for (const item of fused) {
+      const key = item.word.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
 
-      // Already fused entity (@)
-      if (token.startsWith('@')) {
-        const key = token.toLowerCase();
-        if (!seen.has(key)) {
-          seen.add(key);
-          entities.push(token);
-        }
+      // Numbers → ?attribute
+      if (/\d/.test(item.word)) {
+        attrs.push('?' + item.word);
         continue;
       }
 
-      const clean = token.replace(/^[.,;:]+|[.,;:]+$/g, '');
-      if (!clean) continue;
-      const lower = clean.toLowerCase();
-
-      if (LensEngine.blacklist.has(lower)) continue;
-      if (LensEngine.intentMap.has(lower)) continue;
-      if (seen.has(lower)) continue;
-      seen.add(lower);
-
-      const translated = LensEngine.nounTranslate.get(lower) || lower;
-
-      // Number + unit fusion
-      if (/^\d+$/.test(clean)) {
-        const next = idx + 1 < fusedTokens.length ? fusedTokens[idx + 1].toLowerCase().replace(/[.,;:]/g, '') : '';
-        const unitMap: Record<string, string> = {
-          'dias': 'd', 'dia': 'd', 'days': 'd', 'day': 'd',
-          'meses': 'm', 'mês': 'm', 'months': 'm', 'month': 'm',
-          'anos': 'y', 'ano': 'y', 'years': 'y', 'year': 'y',
-          'horas': 'h', 'hora': 'h', 'hours': 'h', 'hour': 'h',
-          'minutos': 'min', 'min': 'min', 'minutes': 'min',
-        };
-        if (unitMap[next]) {
-          attrs.push('?' + clean + unitMap[next]);
-          seen.add(next);
-        } else {
-          attrs.push('?' + clean);
-        }
+      // Adjective suffix → ?attribute
+      if (LensEngine.ADJECTIVE_SUFFIX.test(item.word.toLowerCase())) {
+        attrs.push('?' + item.word.toLowerCase());
         continue;
       }
 
-      // Version/number pattern
-      if (/^v?\d[\d.]*$/.test(clean)) {
-        attrs.push('?' + clean);
+      // ALLCAPS or mid-sentence Capitalized → @entity
+      if (/^[A-Z]/.test(item.word)) {
+        entities.push('@' + item.word);
         continue;
       }
 
-      // Output type (%)
-      if (LensEngine.outputTypes.has(lower) || LensEngine.outputTypes.has(translated)) {
-        outputs.push('%' + translated);
-        continue;
-      }
-
-      // Attribute (?)
-      if (LensEngine.explicitAttrs.has(lower) || LensEngine.explicitAttrs.has(translated)
-        || LensEngine.attrSuffixPt.test(lower) || LensEngine.attrSuffixEn.test(lower)) {
-        attrs.push('?' + translated);
-        continue;
-      }
-
-      // Single proper noun -> @
-      if (this.isProperNoun(clean)) {
-        entities.push('@' + clean);
-        continue;
-      }
-
-      // Acronym -> @
-      if (/^[A-Z][A-Z0-9]+$/.test(clean)) {
-        entities.push('@' + clean);
-        continue;
-      }
-
-      // First noun = !action, rest = #niche
+      // First lowercase survivor → !action, rest → #niche
       if (!action) {
-        action = '!' + translated;
+        action = '!' + item.word;
       } else {
-        niches.push('#' + translated);
+        niches.push('#' + item.word);
       }
     }
 
-    // 6. Assemble: [tag] !action #niche @entity %output ?attr
+    // Assemble: [tag] !action #niche @entity ?attr
     const parts: string[] = [];
     if (tag) parts.push(tag);
     if (action) parts.push(action);
     for (const n of niches) parts.push(n);
     for (const e of entities) parts.push(e);
-    for (const o of outputs) parts.push(o);
     for (const a of attrs) parts.push(a);
 
-    let finalOutput = parts.join(' ');
-
-    if (codeBlocks) {
-      finalOutput += '\n\n' + codeBlocks.join('\n\n');
-    }
-
-    finalOutput = finalOutput.trim();
-
+    const finalOutput = parts.join(' ').trim();
     if (!finalOutput) return { output: text, noiseRemoved: 0 };
 
     const outputWordCount = finalOutput.split(/\s+/).length;
-    const noisePercentage = originalWordCount > 0
+    const noise = originalWordCount > 0
       ? Math.max(0, Math.floor(((originalWordCount - outputWordCount) / originalWordCount) * 100))
       : 0;
 
-    return { output: finalOutput, noiseRemoved: noisePercentage };
+    return { output: finalOutput, noiseRemoved: noise };
   }
 
-  private isProperNoun(word: string): boolean {
-    if (!word || word.length < 2) return false;
-    return /^[A-ZÀ-Ý][a-zà-ÿ]/.test(word);
+  // ═══════════════════════════════════════════════════
+  // SHARED LAYERS
+  // ═══════════════════════════════════════════════════
+
+  // Preserve untouchable tokens with placeholders
+  private preserveLayer(text: string): { text: string; map: Map<string, string> } {
+    const map = new Map<string, string>();
+    let counter = 0;
+    const ph = (v: string) => { const k = `\u0000P${counter++}\u0000`; map.set(k, v); return k; };
+
+    let r = text;
+    r = r.replace(/```[\s\S]*?```/g, m => ph(m));           // code blocks
+    r = r.replace(/https?:\/\/\S+/g, m => ph(m));           // URLs
+    r = r.replace(/\[[^\]]+\]/g, m => ph(m));                // bracketed groups
+    r = r.replace(/\b\w+:\s?(?:True|False|true|false)\b/g, m => ph(m)); // key:bool
+    r = r.replace(/\{\{.*?\}\}/g, m => ph(m));               // template vars
+    r = r.replace(/\$[A-Za-z_]\w*/g, m => ph(m));           // $variables
+
+    return { text: r, map };
   }
 
-  public compressCode(code: string): string {
-    return code;
+  // Structural pattern transforms (algorithmic, not word lists)
+  private patternLayer(text: string): string {
+    let r = text;
+
+    // Slash-groups: VIP/Premiere/Stage → [VIP|Pre|Sta]
+    r = r.replace(/\b(\w{2,}(?:\/\w{2,}){1,})\b/g, (_m, group: string) => {
+      const parts = group.split('/');
+      const collapsed = parts.map((p: string) =>
+        p.length > 4 ? p[0].toUpperCase() + p.slice(1, 3).toLowerCase() : p
+      ).join('|');
+      return '[' + collapsed + ']';
+    });
+
+    // Reference pattern: "just as we have for X and Y" → $X,$Y
+    r = r.replace(/[Jj]ust as we have for\s+(\w+)\s+and\s+(\w+)/g, (_m, a, b) => `$${a},$${b}`);
+    r = r.replace(/[Aa]ssim como (?:temos|fizemos) para\s+(\w+)\s+e\s+(\w+)/g, (_m, a, b) => `$${a},$${b}`);
+
+    // Flow markers: multi-word patterns → symbols
+    r = r.replace(/\baccording to\b/gi, '=>');
+    r = r.replace(/\bde acordo com\b/gi, '=>');
+    r = r.replace(/\bbased on\b/gi, '<-');
+    r = r.replace(/\bcom base em\b/gi, '<-');
+    r = r.replace(/\bshould show\b/gi, '-> show');
+    r = r.replace(/\bshould display\b/gi, '-> show');
+    r = r.replace(/\bdeve mostrar\b/gi, '-> show');
+    r = r.replace(/\bit should\b/gi, '->');
+
+    return r;
+  }
+
+  // Score-based line-by-line filtering
+  private scoreFilterLines(text: string, freq: Map<string, number>, totalWords: number, threshold: number): string {
+    const lines = text.split('\n');
+    const result: string[] = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // Preserve blank lines (structure)
+      if (!trimmed) {
+        if (result.length > 0 && result[result.length - 1] !== '') result.push('');
+        continue;
+      }
+
+      // Headers: keep as-is (structural markers)
+      if (this.isHeader(trimmed)) {
+        result.push(trimmed);
+        continue;
+      }
+
+      // Extract bullet marker if present
+      const bulletMatch = trimmed.match(/^([-•–]\s+|\d+\.\s+)(.*)/);
+      const marker = bulletMatch ? bulletMatch[1] : '';
+      const content = bulletMatch ? bulletMatch[2] : trimmed;
+
+      // Score each word, keep survivors
+      const words = content.split(/\s+/);
+      const kept: string[] = [];
+
+      // Detect sentence starts within the line
+      const lineStarts = new Set<number>([0]);
+      for (let i = 0; i < words.length; i++) {
+        if (/[.!?]$/.test(words[i]) && i + 1 < words.length) lineStarts.add(i + 1);
+      }
+
+      for (let i = 0; i < words.length; i++) {
+        const w = words[i];
+        if (w.includes('\u0000')) { kept.push(w); continue; } // placeholders
+
+        const isSentStart = lineStarts.has(i);
+        const score = this.scoreWord(w, freq, totalWords, i === 0 && !marker, isSentStart);
+        if (score >= threshold) kept.push(w);
+      }
+
+      const compressed = kept.join(' ').replace(/\s{2,}/g, ' ').trim();
+      if (compressed) result.push(marker + compressed);
+    }
+
+    return result.join('\n');
+  }
+
+  // Abbreviate known long words
+  private abbreviate(text: string): string {
+    return text.replace(/\b[a-zA-ZÀ-ÿ]{7,}\b/g, word => {
+      return LensEngine.ABBREV.get(word.toLowerCase()) || word;
+    });
+  }
+
+  // Restore placeholders and clean whitespace
+  private restoreAndClean(text: string, map: Map<string, string>): string {
+    let r = text;
+    for (const [key, value] of map.entries()) r = r.replace(key, value);
+    r = r.replace(/[ \t]{2,}/g, ' ');
+    r = r.replace(/\n{3,}/g, '\n\n');
+    return r.split('\n').map(l => l.trimEnd()).join('\n').trim();
+  }
+
+  // ═══════════════════════════════════════════════════
+  // HELPERS
+  // ═══════════════════════════════════════════════════
+
+  private isHeader(line: string): boolean {
+    if (/^#{1,6}\s/.test(line)) return true;
+    if (/^\d+\.\s+[A-ZÀ-Ý]/.test(line)) return true;
+    if (/^[A-ZÀ-Ý][A-ZÀ-Ýa-zà-ÿ\s,–\-&]+$/.test(line) && line.length < 80) return true;
+    return false;
+  }
+
+  private fuseProperNouns(items: { word: string; score: number }[]): { word: string; score: number }[] {
+    const result: { word: string; score: number }[] = [];
+    let i = 0;
+
+    while (i < items.length) {
+      if (/^[A-ZÀ-Ý][a-zà-ÿ]/.test(items[i].word)) {
+        let fused = items[i].word;
+        let maxScore = items[i].score;
+        let j = i + 1;
+        while (j < items.length && /^[A-ZÀ-Ý][a-zà-ÿ]/.test(items[j].word)) {
+          fused += items[j].word;
+          maxScore = Math.max(maxScore, items[j].score);
+          j++;
+        }
+        result.push({ word: fused, score: maxScore });
+        i = j;
+      } else {
+        result.push(items[i]);
+        i++;
+      }
+    }
+
+    return result;
   }
 }
