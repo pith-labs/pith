@@ -7,7 +7,6 @@ const engine = new LensEngine();
 export default function App() {
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
-  const [isHardcore, setIsHardcore] = useState(false);
   const [savings, setSavings] = useState({ distilledTokens: 0, dollars: 0 });
   const [massaGorda, setMassaGorda] = useState(0);
 
@@ -25,7 +24,7 @@ export default function App() {
 
   const handleOptimize = () => {
     if (!input.trim()) return;
-    const { output: optimized, noiseRemoved } = engine.optimize(input, isHardcore);
+    const { output: optimized, noiseRemoved } = engine.optimize(input);
     setOutput(optimized);
     setMassaGorda(noiseRemoved);
   };
@@ -75,18 +74,7 @@ export default function App() {
       
       <div className="flex-1 flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <div className="flex justify-between items-end">
-            <label className="text-sm font-semibold text-slate-300">O que você quer perguntar?</label>
-            <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer hover:text-emerald-400 transition-colors">
-              <input 
-                type="checkbox" 
-                checked={isHardcore}
-                onChange={(e) => setIsHardcore(e.target.checked)}
-                className="accent-emerald-500 rounded bg-slate-800 border-slate-700"
-              />
-              Modo Hardcore (Semantic Distillation)
-            </label>
-          </div>
+          <label className="text-sm font-semibold text-slate-300">O que você quer perguntar?</label>
           <textarea 
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -129,13 +117,13 @@ export default function App() {
       <div className="mt-6 flex gap-3">
         <button 
           onClick={() => {
-            const dict = '[LENS_ZERO_G] Universal Semantic Distiller. Tags: [id]=ideação, [st]=estratégia, [cr]=crítica, [bz]=business, [cp]=comparar, [an]=analyze, [op]=optimize. Context: [sr]=code/script, [pf]=performance. Output: [dn]=dense. Syntax: [tags] Nouns/Adjectives [code].\n';
+            const dict = "I will communicate using the Zero-G Protocol (2-letter tags). Treat:\n[tk]: Task/Jira\n[an]: Analyze\n[op]: Optimize\n[ex]: Explain\n[sr]: Source Code\n[dn]: Dense Output\n[pf]: Performance\nIgnore syntax errors, focus on technical keywords and logical assignments (: , = , ->). Answer in the most token-efficient way possible.";
             navigator.clipboard.writeText(dict);
           }}
           className="px-4 py-3 rounded-lg flex items-center justify-center gap-2 font-bold transition-all bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
-          title="Copiar Dicionário Básico"
+          title="Copiar Sistema Zero-G Integrado"
         >
-          Dict
+          Copy LENS Prompt
         </button>
         <button 
           onClick={copyPrompt}

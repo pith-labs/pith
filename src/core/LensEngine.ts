@@ -33,10 +33,10 @@ export class LensEngine {
       'just', 'as', 'we', 'have', 'for', 'based', 'on', 'the', 'type', 'of', 'and', 'by', 
       'user', 'when', 'they', 'access', 'should', 'show', 'that', 'have', 'display',
       'according', 'to', 'chosen', 'page', 'prop', 'is', 'are', 'was', 'were', 'be', 'it', 
-      'we', 'have', 'like', 'in', 'at', 'with'
+      'we', 'have', 'like', 'in', 'at', 'with', 'about', 'could', 'please', 'would'
   ]);
 
-  public optimize(text: string, hardcore: boolean = false): { output: string, noiseRemoved: number } {
+  public optimize(text: string): { output: string, noiseRemoved: number } {
     try {
         if (!text.trim()) return { output: '[LENS: No meaningful data found]', noiseRemoved: 0 };
 
@@ -57,6 +57,9 @@ export class LensEngine {
         // 2. Extraction & Semantic White-List Filtering
         let remainingText = text;
 
+        // Strip known structural labels regardless of case
+        remainingText = remainingText.replace(/(?:task|tarefa|pergunta|instrução|instrucao|instruction)s?:\s*/gi, '');
+
         // Extract markdown code blocks safely
         const codeBlockRegex = /```[\s\S]*?```/g;
         const codeBlocks = remainingText.match(codeBlockRegex);
@@ -67,10 +70,14 @@ export class LensEngine {
         // Semantic Translation rules
         remainingText = remainingText.replace(/just as we have for/gi, 'Ref:');
         remainingText = remainingText.replace(/ and /gi, '/');
+        
+        // Remove possessives ('s)
+        remainingText = remainingText.replace(/'s/gi, '');
 
         // Tokenize by breaking at spaces
         const tokens = remainingText.split(/\s+/);
         const keptTokens: string[] = [];
+        const seenTokens = new Set<string>();
         let originalWordCount = tokens.length;
         
         for (let token of tokens) {
@@ -90,42 +97,38 @@ export class LensEngine {
             }
 
             // --- SEMANTIC WHITE-LIST RULES ---
+            let shouldKeep = false;
             
             // 1. Structural Formatting / Logic (Brackets, Slashes, Colons, Equals, technical symbols)
             if (/[\[\]\/=:\-<>{}+*&|^%()$#@!~]/.test(cleanToken)) {
-                // Squeeze spaces inside logic blocks ONLY for pure logic elements (e.g. VIP: True -> VIP:True)
-                let logicToken = cleanToken;
-                if (hardcore && (logicToken.includes(':') || logicToken.includes('='))) {
-                     // We keep the token intact, we will handle space squeezing for logic globally if needed.
-                }
-                keptTokens.push(cleanToken);
-                continue;
+                shouldKeep = true;
             }
-            
             // 2. Proper Nouns / Acronyms / Numbers
-            if (/^[A-Z]/.test(cleanToken) || /\d/.test(cleanToken)) {
-                keptTokens.push(cleanToken);
-                continue;
+            else if (/^[A-Z]/.test(cleanToken) || /\d/.test(cleanToken)) {
+                shouldKeep = true;
             }
-
             // 3. Fluff Slaughter (The Kill): Drop if in the massive bilingual blacklist
-            if (LensEngine.fluffWords.has(lw)) {
-                continue;
+            else if (!LensEngine.fluffWords.has(lw)) {
+                // If it made it here, it's a technical lowercase noun or surviving word
+                shouldKeep = true;
             }
 
-            // If it made it here, it's a technical lowercase noun or surviving word
-            keptTokens.push(cleanToken);
+            if (shouldKeep) {
+                // Deduplication logic: Only add if we haven't seen this exact token (case-insensitive deduplication for nouns, strict for logic)
+                const dedupKey = /[A-Z]/.test(cleanToken) || /[\[\]\/=:\-<>{}+*&|^%()$#@!~]/.test(cleanToken) ? cleanToken : lw;
+                if (!seenTokens.has(dedupKey)) {
+                    seenTokens.add(dedupKey);
+                    
+                    // Logic post-processing inline: VIP: True -> VIP:True
+                    let finalToken = cleanToken.replace(/:\s+/g, ':').replace(/=\s+/g, '=');
+                    keptTokens.push(finalToken);
+                }
+            }
         }
 
         // 3. Assemble
         const header = Array.from(tags).join('');
         let payloadString = keptTokens.join(' ');
-
-        // Logic post-processing: VIP: True -> VIP:True
-        if (hardcore) {
-            payloadString = payloadString.replace(/:\s+/g, ':');
-            payloadString = payloadString.replace(/=\s+/g, '=');
-        }
 
         if (codeBlocks) {
             payloadString += '\n\n' + codeBlocks.join('\n\n');
