@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Copy, Sparkles, TerminalSquare } from 'lucide-react';
+import { Copy, TerminalSquare, Zap } from 'lucide-react';
 import { LensEngine } from './core/LensEngine';
 
 const engine = new LensEngine();
@@ -9,6 +9,7 @@ export default function App() {
   const [output, setOutput] = useState('');
   const [savings, setSavings] = useState({ distilledTokens: 0, dollars: 0 });
   const [massaGorda, setMassaGorda] = useState(0);
+  const [isDistilling, setIsDistilling] = useState(false);
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
@@ -22,12 +23,24 @@ export default function App() {
     }
   }, []);
 
-  const handleOptimize = () => {
-    if (!input.trim()) return;
-    const { output: optimized, noiseRemoved } = engine.optimize(input);
-    setOutput(optimized);
-    setMassaGorda(noiseRemoved);
-  };
+  useEffect(() => {
+    if (!input.trim()) {
+      setOutput('');
+      setMassaGorda(0);
+      setIsDistilling(false);
+      return;
+    }
+
+    setIsDistilling(true);
+    const timeoutId = setTimeout(() => {
+      const { output: optimized, noiseRemoved } = engine.optimize(input);
+      setOutput(optimized);
+      setMassaGorda(noiseRemoved);
+      setIsDistilling(false);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [input]);
 
   const calculateEconomy = (rawIn: string, rawOut: string) => {
       // Economy calculation: (Input_Chars - Output_Chars) / 4
@@ -83,17 +96,15 @@ export default function App() {
           />
         </div>
 
-        <button 
-          onClick={handleOptimize}
-          className="mx-auto w-56 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg flex items-center justify-center gap-2 font-bold transition-all shadow-[0_0_10px_rgba(79,70,229,0.2)]"
-        >
-          <Sparkles size={16} />
-          Otimizar (Hardcore)
-        </button>
-
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1 mt-2">
           <div className="flex justify-between items-end">
-            <label className="text-sm font-semibold text-slate-300">Linguagem de Máquina (LENS)</label>
+            <label className="text-sm font-semibold text-slate-300 flex items-center gap-3">
+              Linguagem de Máquina (LENS)
+              <span className={`text-xs font-mono text-emerald-400 flex items-center gap-1 transition-opacity duration-300 ${isDistilling ? 'opacity-100 animate-pulse' : 'opacity-0'}`}>
+                <Zap size={14} className="fill-emerald-400" />
+                Destilando...
+              </span>
+            </label>
             <div className="flex items-center gap-3">
               {massaGorda > 0 && (
                 <span className="text-xs text-rose-400 font-mono font-bold">-{massaGorda}% Massa Gorda</span>
@@ -109,7 +120,7 @@ export default function App() {
             value={output}
             readOnly
             className="w-full h-24 bg-black border border-emerald-900/50 rounded-xl p-3 text-sm text-emerald-400 font-mono focus:outline-none resize-none cursor-text shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]"
-            placeholder="[tk] BFF[P/T/C] @Candy: showtime+tkt => !show [VIP|Pre|Stg] cats ?VIP:True. $PY,$CL"
+            placeholder="[id] !strategy @Marketing !vender brigadeiro ?gourmet @Instagram"
           />
         </div>
       </div>
