@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "LENS",
+  "version": "1.0.0",
+  "description": "LENS - Smart Token Compressor Lab",
+  "permissions": [
+    "storage"
+  ],
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "LENS Dashboard"
+  }
+}
