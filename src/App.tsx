@@ -10,15 +10,19 @@ export default function App() {
   const [savings, setSavings] = useState({ distilledTokens: 0, dollars: 0 });
   const [massaGorda, setMassaGorda] = useState(0);
   const [isDistilling, setIsDistilling] = useState(false);
+  const [lensEnabled, setLensEnabled] = useState(true);
+  const [responseBoost, setResponseBoost] = useState(true);
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get(['distilledTokens'], (result) => {
+      chrome.storage.local.get(['distilledTokens', 'lensEnabled', 'responseBoost'], (result) => {
         const tokens = result.distilledTokens || 0;
         setSavings({
           distilledTokens: tokens,
-          dollars: (tokens / 1_000_000) * 15 // Assuming $15 per 1M tokens avg
+          dollars: (tokens / 1_000_000) * 15
         });
+        setLensEnabled(result.lensEnabled !== false);
+        setResponseBoost(result.responseBoost !== false);
       });
     }
   }, []);
@@ -125,7 +129,40 @@ export default function App() {
         </div>
       </div>
 
-      <div className="mt-6 flex gap-3">
+      <div className="mt-4 flex flex-col gap-2 border-t border-slate-800 pt-4">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-slate-300">Modo Invisível (Auto-compress)</span>
+          <button
+            onClick={() => {
+              const next = !lensEnabled;
+              setLensEnabled(next);
+              if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+                chrome.storage.local.set({ lensEnabled: next });
+              }
+            }}
+            className={`w-10 h-5 rounded-full transition-colors relative ${lensEnabled ? 'bg-emerald-500' : 'bg-slate-600'}`}
+          >
+            <span className={`block w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${lensEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-slate-300">Response Boost (respostas concisas)</span>
+          <button
+            onClick={() => {
+              const next = !responseBoost;
+              setResponseBoost(next);
+              if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+                chrome.storage.local.set({ responseBoost: next });
+              }
+            }}
+            className={`w-10 h-5 rounded-full transition-colors relative ${responseBoost ? 'bg-emerald-500' : 'bg-slate-600'}`}
+          >
+            <span className={`block w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${responseBoost ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 flex gap-3">
         <button 
           onClick={() => {
             const dict = "I will communicate using the Zero-G Protocol (2-letter tags). Treat:\n[tk]: Task/Jira\n[an]: Analyze\n[op]: Optimize\n[ex]: Explain\n[sr]: Source Code\n[dn]: Dense Output\n[pf]: Performance\nIgnore syntax errors, focus on technical keywords and logical assignments (: , = , ->). Answer in the most token-efficient way possible.";

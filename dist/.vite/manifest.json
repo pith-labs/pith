@@ -10,11 +10,11 @@
     "name": "LensEngine"
   },
   "content.ts-loader.js": {
-    "file": "assets/content.ts-loader-R2llR2_n.js",
+    "file": "assets/content.ts-loader-BRb-mMzg.js",
     "src": "content.ts-loader.js"
   },
   "index.html": {
-    "file": "assets/index.html-CxKgqe3g.js",
+    "file": "assets/index.html-DOa-ty0Y.js",
     "name": "index.html",
     "src": "index.html",
     "isEntry": true,
@@ -22,11 +22,11 @@
       "_LensEngine-Cf2D1X_8.js"
     ],
     "css": [
-      "assets/index-OKUKqiXO.css"
+      "assets/index-Dp8Phf-Z.css"
     ]
   },
   "src/content/content.ts": {
-    "file": "assets/content.ts-betALeXW.js",
+    "file": "assets/content.ts-BnyJXLyV.js",
     "name": "content.ts",
     "src": "src/content/content.ts",
     "isEntry": true,

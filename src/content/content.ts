@@ -2,11 +2,16 @@ import { LensEngine } from '../core/LensEngine';
 
 const engine = new LensEngine();
 let lensEnabled = true;
+let responseBoost = true;
+
+// Concise response instruction — ~10 tokens that save hundreds on output
+const RESPONSE_HINT = '\n[Be concise. No filler. Direct answer only.]';
 
 // Load saved state
 if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-  chrome.storage.local.get(['lensEnabled'], (result) => {
+  chrome.storage.local.get(['lensEnabled', 'responseBoost'], (result) => {
     lensEnabled = result.lensEnabled !== false; // default ON
+    responseBoost = result.responseBoost !== false; // default ON
   });
 
   // Listen for toggle from popup or shortcut
@@ -14,6 +19,9 @@ if (typeof chrome !== 'undefined' && chrome.storage?.local) {
     if (changes.lensEnabled) {
       lensEnabled = changes.lensEnabled.newValue !== false;
       showBadge(lensEnabled ? 'LENS ON' : 'LENS OFF', lensEnabled ? '#10b981' : '#ef4444');
+    }
+    if (changes.responseBoost) {
+      responseBoost = changes.responseBoost.newValue !== false;
     }
   });
 }
@@ -67,19 +75,22 @@ document.addEventListener('keydown', (e) => {
   // Not worth compressing (< 5% reduction)
   if (noiseRemoved < 5) return;
 
+  // Append response boost hint if enabled
+  const finalOutput = responseBoost ? output + RESPONSE_HINT : output;
+
   // Stop original submit
   e.preventDefault();
   e.stopPropagation();
 
   // Replace text in the input
   if (isTextarea) {
-    setTextareaValue(el as HTMLTextAreaElement, output);
+    setTextareaValue(el as HTMLTextAreaElement, finalOutput);
   } else {
-    setContentEditableText(el as HTMLElement, output);
+    setContentEditableText(el as HTMLElement, finalOutput);
   }
 
   // Save token savings
-  const tokensSaved = Math.max(0, Math.floor((text.length - output.length) / 4));
+  const tokensSaved = Math.max(0, Math.floor((text.length - finalOutput.length) / 4));
   saveTokens(tokensSaved);
 
   // Wait for framework to process the text change, then re-send
@@ -142,14 +153,17 @@ document.addEventListener('click', (e) => {
   const { output, noiseRemoved } = engine.optimize(text);
   if (noiseRemoved < 5) return;
 
+  // Append response boost hint if enabled
+  const finalOutput = responseBoost ? output + RESPONSE_HINT : output;
+
   // Replace text (don't block the click — just change content before it sends)
   if (isTextarea) {
-    setTextareaValue(input as HTMLTextAreaElement, output);
+    setTextareaValue(input as HTMLTextAreaElement, finalOutput);
   } else {
-    setContentEditableText(input as HTMLElement, output);
+    setContentEditableText(input as HTMLElement, finalOutput);
   }
 
-  const tokensSaved = Math.max(0, Math.floor((text.length - output.length) / 4));
+  const tokensSaved = Math.max(0, Math.floor((text.length - finalOutput.length) / 4));
   saveTokens(tokensSaved);
 
   // Small delay to let the text update propagate, then re-click
