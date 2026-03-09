@@ -1,17 +1,37 @@
 {
   "../../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-CnPND5oR.js",
+    "file": "assets/crx-manifest.js-C0J6I0U-.js",
     "name": "crx-manifest.js",
     "src": "../../../../../@crx/manifest",
     "isEntry": true
   },
+  "_LensEngine-Cf2D1X_8.js": {
+    "file": "assets/LensEngine-Cf2D1X_8.js",
+    "name": "LensEngine"
+  },
+  "content.ts-loader.js": {
+    "file": "assets/content.ts-loader-R2llR2_n.js",
+    "src": "content.ts-loader.js"
+  },
   "index.html": {
-    "file": "assets/index.html-8leMLvGu.js",
+    "file": "assets/index.html-CxKgqe3g.js",
     "name": "index.html",
     "src": "index.html",
     "isEntry": true,
+    "imports": [
+      "_LensEngine-Cf2D1X_8.js"
+    ],
     "css": [
-      "assets/index-fh-DorJd.css"
+      "assets/index-OKUKqiXO.css"
+    ]
+  },
+  "src/content/content.ts": {
+    "file": "assets/content.ts-betALeXW.js",
+    "name": "content.ts",
+    "src": "src/content/content.ts",
+    "isEntry": true,
+    "imports": [
+      "_LensEngine-Cf2D1X_8.js"
     ]
   }
 }

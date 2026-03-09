@@ -1,13 +1,38 @@
 {
   "manifest_version": 3,
   "name": "LENS",
-  "version": "1.0.0",
-  "description": "LENS - Smart Token Compressor Lab",
+  "version": "2.0.0",
+  "description": "LENS - Invisible AI Prompt Compressor",
   "permissions": [
     "storage"
   ],
   "action": {
     "default_popup": "index.html",
     "default_title": "LENS Dashboard"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://www.perplexity.ai/*",
+        "https://copilot.microsoft.com/*",
+        "https://poe.com/*",
+        "https://you.com/*"
+      ],
+      "js": ["src/content/content.ts"],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "toggle-lens": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+L",
+        "mac": "Command+Shift+L"
+      },
+      "description": "Toggle LENS on/off"
+    }
   }
 }

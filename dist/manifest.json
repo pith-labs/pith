@@ -1,13 +1,59 @@
 {
   "manifest_version": 3,
   "name": "LENS",
-  "version": "1.0.0",
-  "description": "LENS - Smart Token Compressor Lab",
+  "version": "2.0.0",
+  "description": "LENS - Invisible AI Prompt Compressor",
   "permissions": [
     "storage"
   ],
   "action": {
     "default_popup": "index.html",
     "default_title": "LENS Dashboard"
-  }
+  },
+  "content_scripts": [
+    {
+      "js": [
+        "assets/content.ts-loader-R2llR2_n.js"
+      ],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://www.perplexity.ai/*",
+        "https://copilot.microsoft.com/*",
+        "https://poe.com/*",
+        "https://you.com/*"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "toggle-lens": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+L",
+        "mac": "Command+Shift+L"
+      },
+      "description": "Toggle LENS on/off"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "https://chat.openai.com/*",
+        "https://chatgpt.com/*",
+        "https://claude.ai/*",
+        "https://copilot.microsoft.com/*",
+        "https://gemini.google.com/*",
+        "https://poe.com/*",
+        "https://www.perplexity.ai/*",
+        "https://you.com/*"
+      ],
+      "resources": [
+        "assets/LensEngine-Cf2D1X_8.js",
+        "assets/content.ts-betALeXW.js"
+      ],
+      "use_dynamic_url": false
+    }
+  ]
 }
