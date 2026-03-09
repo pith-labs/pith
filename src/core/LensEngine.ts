@@ -28,12 +28,11 @@ export class LensEngine {
       'seu', 'sua', 'nosso', 'nossa', 'lhe', 'lhes', 'te', 'se', 'vos',
       'vamos', 'fazer', 'falar', 'ser', 'estar', 'ter', 'deve', 'quero', 'gostaria',
       'poderia', 'por favor', 'agradeço', 'olá', 'oi', 'bom dia', 'boa tarde', 'boa noite',
-      'baseado', 'acordo', 'tudo', 'bem', 'texto',
+      'tudo', 'bem', 'texto',
       // English Aggressive Blacklist
-      'just', 'as', 'we', 'have', 'for', 'based', 'on', 'the', 'type', 'of', 'and', 'by', 
-      'user', 'when', 'they', 'access', 'should', 'show', 'that', 'have', 'display',
-      'according', 'to', 'chosen', 'page', 'prop', 'is', 'are', 'was', 'were', 'be', 'it', 
-      'we', 'have', 'like', 'in', 'at', 'with', 'about', 'could', 'please', 'would'
+      'the', 'of', 'by', 'user', 'they', 'access', 'that',
+      'to', 'chosen', 'page', 'prop', 'is', 'are', 'was', 'were', 'be', 'it', 
+      'in', 'at', 'with', 'about', 'could', 'please', 'would', 'have', 'we', 'on'
   ]);
 
   public optimize(text: string): { output: string, noiseRemoved: number } {
@@ -54,44 +53,77 @@ export class LensEngine {
         // Fallback intent if task is mentioned
         if (text.toLowerCase().includes('task') && !tags.has('[tk]')) tags.add('[tk]');
 
-        // 2. Extraction & Semantic White-List Filtering
-        let remainingText = text;
+        // 2. Machine Symbology Processing (God Mode)
+        let processedText = text;
 
-        // Strip known structural labels regardless of case
-        remainingText = remainingText.replace(/(?:task|tarefa|pergunta|instrução|instrucao|instruction)s?:\s*/gi, '');
+        // Strip structural labels
+        processedText = processedText.replace(/(?:task|tarefa|pergunta|instrução|instrucao|instruction)s?:\s*/gi, '');
 
         // Extract markdown code blocks safely
         const codeBlockRegex = /```[\s\S]*?```/g;
-        const codeBlocks = remainingText.match(codeBlockRegex);
+        const codeBlocks = processedText.match(codeBlockRegex);
         if (codeBlocks) {
-            remainingText = remainingText.replace(codeBlockRegex, ''); 
+            processedText = processedText.replace(codeBlockRegex, ''); 
         }
 
-        // Semantic Translation rules
-        remainingText = remainingText.replace(/just as we have for/gi, 'Ref:');
-        remainingText = remainingText.replace(/ and /gi, '/');
-        
-        // Remove possessives ('s)
-        remainingText = remainingText.replace(/'s/gi, '');
+        // Structural Grouping (VIP/Premiere/Stage -> [VIP|Pre|Stg])
+        processedText = processedText.replace(/\b([A-Z][a-zA-Z0-9_]*)\/([A-Z][a-zA-Z0-9_]*)(?:\/([A-Z][a-zA-Z0-9_]*))?\b/g, (_match, p1, p2, p3) => {
+            let res = `[${p1.substring(0,3)}|${p2.substring(0,3)}`;
+            if (p3) res += `|${p3.substring(0,3)}`;
+            res += ']';
+            return res;
+        });
 
-        // Tokenize by breaking at spaces
-        const tokens = remainingText.split(/\s+/);
+        // Grouping 2 ( [Purchase/Tickets/Candy] -> [P/T/C] )
+        processedText = processedText.replace(/\[([a-zA-Z0-9_\/]+)\]/g, (_match, inner) => {
+            if (!inner.includes('/')) return _match;
+            return '[' + inner.split('/').map((p:string) => p.substring(0,1).toUpperCase()).join('/') + ']';
+        });
+
+        // @ Local / Context
+        processedText = processedText.replace(/(?:when they access|na página de|no contexto de)\s+([a-zA-Z0-9_]+)'?s?(?:\s+page|\s+context)?/gi, '@$1:');
+        
+        // ! Action
+        processedText = processedText.replace(/(?:display|should show|obrigatório|deve mostrar|show)/gi, '!show');
+        
+        // => Flow / Result
+        processedText = processedText.replace(/(?:according to|de acordo com|então|then)/gi, '=>');
+        
+        // $ Reference / Condition
+        processedText = processedText.replace(/(?:just as we have for|based on(?: the type of)?|like|como o|referência)/gi, '$');
+        
+        // ? Condition / Requirement
+        processedText = processedText.replace(/(?:that have the prop|tem que ter|onde|where|must have)/gi, '?');
+
+        // + Logical AND
+        processedText = processedText.replace(/\s+and\s+/gi, '+');
+
+        // Remove possessives ('s)
+        processedText = processedText.replace(/'s/gi, '');
+
+        // Abbreviate long tech nouns
+        processedText = processedText.replace(/\b(categories|category)\b/gi, 'cats');
+        processedText = processedText.replace(/\b(products|product)\b/gi, 'prod');
+        processedText = processedText.replace(/\b(tickets|ticket)\b/gi, 'tkt');
+
+        // 3. Extraction & Semantic Filtering
+        const tokens = processedText.split(/\s+/);
         const keptTokens: string[] = [];
         const seenTokens = new Set<string>();
-        let originalWordCount = tokens.length;
+        let originalWordCount = text.split(/\s+/).length; // Base noise on original unmodified length
         
         for (let token of tokens) {
             let cleanToken = token;
             
-            // Allow trailing punctuation if it's attached to a logic block, otherwise strip trailing generic punctuation.
+            // Strip trailing generic punctuation unless it's a bracket/logic symbol
             if (!/[\]=:\->}]+$/.test(cleanToken)) {
-                 cleanToken = cleanToken.replace(/^[.,!?]+|[.,!?]+$/g, '');
+                 cleanToken = cleanToken.replace(/^[.,]+|[.,]+$/g, '');
             }
             if (!cleanToken) continue;
 
             const lw = cleanToken.toLowerCase();
 
-            // Intent words themselves are fully dropped as text since they became tags
+            // Intent words logic
             if (LensEngine.taskMappings.has(lw) || LensEngine.contextMappings.has(lw)) {
                 continue;
             }
@@ -99,8 +131,8 @@ export class LensEngine {
             // --- SEMANTIC WHITE-LIST RULES ---
             let shouldKeep = false;
             
-            // 1. Structural Formatting / Logic (Brackets, Slashes, Colons, Equals, technical symbols)
-            if (/[\[\]\/=:\-<>{}+*&|^%()$#@!~]/.test(cleanToken)) {
+            // 1. Structural Formatting / Logic (Symbols: @, !, =>, ?, $, +, Brackets, Slashes, Colons, Equals)
+            if (/[\[\]\/=:\-<>{}+*&|^%()$#@!~?]/.test(cleanToken)) {
                 shouldKeep = true;
             }
             // 2. Proper Nouns / Acronyms / Numbers
@@ -109,24 +141,28 @@ export class LensEngine {
             }
             // 3. Fluff Slaughter (The Kill): Drop if in the massive bilingual blacklist
             else if (!LensEngine.fluffWords.has(lw)) {
-                // If it made it here, it's a technical lowercase noun or surviving word
+                // Technical lowercase noun
                 shouldKeep = true;
             }
 
             if (shouldKeep) {
-                // Deduplication logic: Only add if we haven't seen this exact token (case-insensitive deduplication for nouns, strict for logic)
-                const dedupKey = /[A-Z]/.test(cleanToken) || /[\[\]\/=:\-<>{}+*&|^%()$#@!~]/.test(cleanToken) ? cleanToken : lw;
-                if (!seenTokens.has(dedupKey)) {
-                    seenTokens.add(dedupKey);
+                // Deduplication logic
+                const dedupKey = /[A-Z]/.test(cleanToken) || /[\[\]\/=:\-<>{}+*&|^%()$#@!~?]/.test(cleanToken) ? cleanToken : lw;
+                
+                // Allow duplicate logic symbols and symbols attached to words
+                if (/[@!$?=>+]/.test(cleanToken) || !seenTokens.has(dedupKey)) {
+                    if (!/[@!$?=>+]/.test(cleanToken)) {
+                        seenTokens.add(dedupKey);
+                    }
                     
-                    // Logic post-processing inline: VIP: True -> VIP:True
+                    // Logic post-processing inline
                     let finalToken = cleanToken.replace(/:\s+/g, ':').replace(/=\s+/g, '=');
                     keptTokens.push(finalToken);
                 }
             }
         }
 
-        // 3. Assemble
+        // 4. Assemble
         const header = Array.from(tags).join('');
         let payloadString = keptTokens.join(' ');
 
@@ -135,7 +171,6 @@ export class LensEngine {
         }
 
         let finalOutput = header;
-        // Never remove spaces between words. Tokenizers need spaces.
         if (payloadString) {
             finalOutput += (header ? ' ' : '') + payloadString.trim();
         }
@@ -147,8 +182,6 @@ export class LensEngine {
         }
 
         // Calculate Noise Removed (Massa Gorda)
-        // Calculated based on the number of WORDS dropped rather than characters 
-        // to reflect true semantic distillation.
         const keptWordCount = keptTokens.length;
         let noisePercentage = 0;
         if (originalWordCount > 0) {

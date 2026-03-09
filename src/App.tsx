@@ -109,7 +109,7 @@ export default function App() {
             value={output}
             readOnly
             className="w-full h-24 bg-black border border-emerald-900/50 rounded-xl p-3 text-sm text-emerald-400 font-mono focus:outline-none resize-none cursor-text shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]"
-            placeholder="[an][sr] BFF [Purchase/Tickets] VIP:True"
+            placeholder="[tk] BFF[P/T/C] @Candy: showtime+tkt => !show [VIP|Pre|Stg] cats ?VIP:True. $PY,$CL"
           />
         </div>
       </div>
