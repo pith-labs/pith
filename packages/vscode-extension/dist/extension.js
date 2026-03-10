@@ -475,6 +475,9 @@ var PithEngine = class _PithEngine {
 
 // src/extension.ts
 function activate(context) {
+  console.log("====================================");
+  console.log("PITH EXTENSION IS ACTIVATING...");
+  console.log("====================================");
   const engine = new PithEngine();
   const participant = vscode.chat.createChatParticipant("pith.assistant", async (request, chatContext, response, token) => {
     const userInput = request.prompt;
@@ -516,6 +519,40 @@ function activate(context) {
     }
   });
   context.subscriptions.push(participant);
+  const optimizeCommand = vscode.commands.registerCommand("pith.optimize", async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showErrorMessage("Abra um arquivo e selecione um texto para usar o Pith.");
+      return;
+    }
+    const selection = editor.selection;
+    const text = editor.document.getText(selection);
+    if (!text.trim()) {
+      vscode.window.showWarningMessage("Por favor, selecione algum texto.");
+      return;
+    }
+    try {
+      vscode.window.showInformationMessage("Pith: Otimizando seu prompt...");
+      const { output, noiseRemoved } = engine.optimize(text);
+      await vscode.env.clipboard.writeText(output);
+      vscode.window.showInformationMessage(
+        `[PITH] Prompt copiado! (${noiseRemoved}% de ru\xEDdo removido)`
+      );
+      const doc = await vscode.workspace.openTextDocument({
+        content: `// Pith Engine Optimizations
+// Noise Removed: ${noiseRemoved}%
+// Prompt copiado automaticamente para sua \xE1rea de transfer\xEAncia!
+
+${output}`,
+        language: "markdown"
+      });
+      await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Beside });
+    } catch (error) {
+      console.error("Command Pith optimize failed", error);
+      vscode.window.showErrorMessage(`Erro ao otimizar com o Pith: ${error.message}`);
+    }
+  });
+  context.subscriptions.push(optimizeCommand);
 }
 function deactivate() {
 }

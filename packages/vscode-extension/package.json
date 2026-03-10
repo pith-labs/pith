@@ -2,7 +2,7 @@
   "name": "pith-vscode",
   "displayName": "Pith",
   "description": "Zero-G prompt compressor and distiller for LLMs",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "publisher": "angelo-castro",
   "engines": {
     "vscode": "^1.90.0"
@@ -11,15 +11,20 @@
     "Other",
     "Machine Learning"
   ],
-  "activationEvents": [
-    "onChatParticipant:pith.assistant"
-  ],
+  "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "pith.optimize",
+        "title": "Pith: Optimize Selected Text"
+      }
+    ],
     "chatParticipants": [
       {
         "id": "pith.assistant",
         "name": "pith",
+        "fullName": "Pith Compressor",
         "description": "Zero-G prompt compressor"
       }
     ]
