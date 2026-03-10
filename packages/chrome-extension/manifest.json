@@ -4,7 +4,9 @@
   "version": "2.1.0",
   "description": "PITH - Invisible AI Prompt Compressor. Remove noise, save tokens.",
   "permissions": [
-    "storage"
+    "storage",
+    "identity",
+    "tabs"
   ],
   "action": {
     "default_popup": "index.html",

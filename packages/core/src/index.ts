@@ -1,1 +1,1 @@
-export { PithEngine } from './PithEngine';
+export { PithEngine } from './PithEngine.js';

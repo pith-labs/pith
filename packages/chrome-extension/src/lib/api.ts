@@ -1,0 +1,55 @@
+const API_URL = import.meta.env.VITE_API_URL as string; // e.g. https://pith-api.onrender.com
+
+async function request<T>(path: string, token: string, opts: RequestInit = {}): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...opts.headers,
+    },
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as any;
+    throw new Error(body.error ?? `HTTP ${res.status}`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+export interface BackendStats {
+  totalTokensSaved:    number;
+  totalCompressions:   number;
+  avgNoiseRemoved:     number;
+  dollarsSaved:        number;
+  monthlyCompressions: number;
+  monthlyTokensSaved:  number;
+}
+
+export interface UserProfile {
+  id:     string;
+  tier:   'free' | 'pro';
+  apiKey: string | null;
+}
+
+export const api = {
+  // Fetch lifetime stats from backend
+  stats: (token: string) =>
+    request<BackendStats>('/v1/stats', token),
+
+  // Get user profile + tier
+  user: (token: string) =>
+    request<UserProfile>('/v1/user', token),
+
+  // Sync local token savings accumulated before login
+  syncLocal: (token: string, tokensSaved: number) =>
+    request<{ synced: boolean }>('/v1/user/sync', token, {
+      method: 'PATCH',
+      body: JSON.stringify({ tokensSaved }),
+    }),
+
+  // Create Stripe Pro checkout session — returns redirect URL
+  checkout: (token: string) =>
+    request<{ url: string }>('/v1/stripe/checkout', token, { method: 'POST' }),
+};

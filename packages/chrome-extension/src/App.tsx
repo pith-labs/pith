@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Copy, TerminalSquare, Zap, Share2 } from 'lucide-react';
+import { Copy, TerminalSquare, Zap, Share2, LogIn, LogOut, Crown } from 'lucide-react';
 import { PithEngine } from '@pith/core';
+import { loginWithGoogle, loadSession, logout as doLogout, type Session } from './lib/auth.js';
+import { api, type BackendStats } from './lib/api.js';
 
 const engine = new PithEngine();
+
+const FREE_MONTHLY_LIMIT = 100;
 
 const ONBOARDING_EXAMPLE = `Olá, tudo bem? Gostaria de pedir um favor. Eu estava pensando que seria muito interessante se você pudesse me ajudar a criar uma estratégia de marketing para o meu negócio de brigadeiros gourmet no Instagram. Você consegue fazer isso para mim?`;
 
@@ -78,6 +82,12 @@ export default function App() {
   const [outputCompress, setOutputCompress] = useState(true);
   const [shareCopied, setShareCopied] = useState(false);
 
+  // Auth state
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [backendStats, setBackendStats] = useState<BackendStats | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
       chrome.storage.local.get(['distilledTokens', 'pithEnabled', 'responseBoost', 'outputCompress', 'hasSeenOnboarding'], (result) => {
@@ -91,10 +101,77 @@ export default function App() {
         setOutputCompress(result.outputCompress !== false);
         setHasSeenOnboarding(result.hasSeenOnboarding === true);
       });
+
+      // Load persisted session
+      loadSession().then((s) => {
+        if (s) {
+          setSession(s);
+          fetchBackendStats(s);
+        }
+      });
     } else {
       setHasSeenOnboarding(true);
     }
   }, []);
+
+  const fetchBackendStats = async (s: Session) => {
+    try {
+      const [stats, user] = await Promise.all([
+        api.stats(s.accessToken),
+        api.user(s.accessToken),
+      ]);
+      setBackendStats(stats);
+      // Update tier from backend
+      setSession((prev) => prev ? { ...prev, tier: user.tier } : prev);
+    } catch {
+      // silently fail — offline or token expired
+    }
+  };
+
+  const handleLogin = async () => {
+    setIsLoggingIn(true);
+    setAuthError(null);
+    try {
+      const s = await loginWithGoogle();
+
+      // Sync any locally accumulated tokens before getting backend stats
+      const localTokens = savings.distilledTokens;
+      if (localTokens > 0) {
+        await api.syncLocal(s.accessToken, localTokens).catch(() => {});
+      }
+
+      // Fetch user profile (may update tier) + stats
+      const [stats, user] = await Promise.all([
+        api.stats(s.accessToken),
+        api.user(s.accessToken),
+      ]);
+      setBackendStats(stats);
+      setSession({ ...s, tier: user.tier });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao fazer login';
+      if (!msg.includes('cancelled') && !msg.includes('cancel')) {
+        setAuthError(msg);
+      }
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await doLogout();
+    setSession(null);
+    setBackendStats(null);
+  };
+
+  const handleUpgrade = async () => {
+    if (!session) return;
+    try {
+      const { url } = await api.checkout(session.accessToken);
+      if (url) chrome.tabs.create({ url });
+    } catch {
+      // ignore
+    }
+  };
 
   const finishOnboarding = () => {
     setHasSeenOnboarding(true);
@@ -154,6 +231,12 @@ export default function App() {
 
   const currentSavings = input && output ? calculateEconomy(input, output) : 0;
 
+  // Use backend stats when available, fallback to local
+  const displayTokens = backendStats?.totalTokensSaved ?? savings.distilledTokens;
+  const displayDollars = backendStats?.dollarsSaved ?? savings.dollars;
+  const monthlyUsed = backendStats?.monthlyCompressions ?? 0;
+  const isPro = session?.tier === 'pro';
+
   if (hasSeenOnboarding === null) return null;
   if (!hasSeenOnboarding) return <OnboardingScreen onFinish={finishOnboarding} />;
 
@@ -163,25 +246,101 @@ export default function App() {
         <div className="flex items-center gap-2">
           <TerminalSquare className="text-emerald-400" />
           <h1 className="text-xl font-bold tracking-tight">PITH v3</h1>
+          {session && (
+            <span className={`flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded-full ${isPro ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-slate-700 text-slate-400'}`}>
+              {isPro && <Crown size={10} />}
+              {isPro ? 'PRO' : 'FREE'}
+            </span>
+          )}
         </div>
-        <div className="flex flex-col items-end gap-1 text-sm font-mono">
-          <div className="flex items-center gap-2">
-            <span className="text-emerald-400 font-bold">{savings.distilledTokens.toLocaleString()} Tokens Destilados</span>
-            <button
-              onClick={shareStats}
-              title="Compartilhar suas estatísticas"
-              className="text-slate-500 hover:text-emerald-400 transition-colors"
-            >
-              {shareCopied ? (
-                <span className="text-xs text-emerald-400 font-sans font-normal">copiado!</span>
-              ) : (
-                <Share2 size={14} />
-              )}
-            </button>
+
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col items-end gap-0.5 text-sm font-mono">
+            <div className="flex items-center gap-2">
+              <span className="text-emerald-400 font-bold">{displayTokens.toLocaleString()} tk</span>
+              <button
+                onClick={shareStats}
+                title="Compartilhar estatísticas"
+                className="text-slate-500 hover:text-emerald-400 transition-colors"
+              >
+                {shareCopied ? (
+                  <span className="text-xs text-emerald-400 font-sans font-normal">copiado!</span>
+                ) : (
+                  <Share2 size={14} />
+                )}
+              </button>
+            </div>
+            <span className="text-slate-400 text-xs">${displayDollars.toFixed(2)} saved</span>
           </div>
-          <span className="text-slate-400 text-xs">${savings.dollars.toFixed(2)} economizados</span>
+
+          {session ? (
+            <button
+              onClick={handleLogout}
+              title={`Logout (${session.email})`}
+              className="text-slate-500 hover:text-rose-400 transition-colors"
+            >
+              <LogOut size={16} />
+            </button>
+          ) : (
+            <button
+              onClick={handleLogin}
+              disabled={isLoggingIn}
+              title="Login com Google"
+              className="flex items-center gap-1.5 text-xs font-mono px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-colors disabled:opacity-50"
+            >
+              <LogIn size={13} />
+              {isLoggingIn ? '...' : 'Login'}
+            </button>
+          )}
         </div>
       </header>
+
+      {authError && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-rose-900/30 border border-rose-800 text-xs text-rose-400 font-mono">
+          {authError}
+        </div>
+      )}
+
+      {/* Free tier usage bar */}
+      {session && !isPro && (
+        <div className="mb-3 flex flex-col gap-1.5">
+          <div className="flex justify-between text-xs font-mono">
+            <span className="text-slate-400">Uso mensal</span>
+            <span className={monthlyUsed >= FREE_MONTHLY_LIMIT ? 'text-rose-400 font-bold' : 'text-slate-400'}>
+              {monthlyUsed}/{FREE_MONTHLY_LIMIT}
+            </span>
+          </div>
+          <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${monthlyUsed >= FREE_MONTHLY_LIMIT ? 'bg-rose-500' : 'bg-emerald-500'}`}
+              style={{ width: `${Math.min(100, (monthlyUsed / FREE_MONTHLY_LIMIT) * 100)}%` }}
+            />
+          </div>
+          {monthlyUsed >= FREE_MONTHLY_LIMIT && (
+            <button
+              onClick={handleUpgrade}
+              className="w-full py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+            >
+              <Crown size={12} />
+              Limite atingido — Upgrade para PRO
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Upgrade CTA for logged-in free users under limit */}
+      {session && !isPro && monthlyUsed < FREE_MONTHLY_LIMIT && (
+        <div className="mb-3 flex items-center justify-between px-3 py-2 rounded-lg bg-amber-900/20 border border-amber-800/40">
+          <span className="text-xs text-amber-400/80">Compressões ilimitadas + API Key</span>
+          <button
+            onClick={handleUpgrade}
+            className="text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors"
+          >
+            <Crown size={11} />
+            Upgrade PRO
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col gap-4">
         <div className="flex flex-col gap-1">
