@@ -10,13 +10,9 @@ import { licenseRouter } from './routes/license.js';
 const app = new Hono();
 
 app.use('*', logger());
+// Open CORS — auth is enforced via JWT on each route
 app.use('*', cors({
-  origin: (origin) => {
-    if (!origin) return '*';
-    if (origin.startsWith('chrome-extension://')) return origin;
-    if (['https://pith.app', 'http://localhost:3000'].includes(origin)) return origin;
-    return null;
-  },
+  origin: (origin) => origin || '*',
   allowHeaders: ['Authorization', 'Content-Type'],
 }));
 
