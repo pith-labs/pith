@@ -4,6 +4,16 @@ const engine = new PithEngine();
 let pithEnabled = true;
 let responseBoost = true;
 let outputCompress = true;
+let sessionToken: string | null = null;
+
+const API_URL = import.meta.env.VITE_API_URL as string;
+
+// Load session token
+if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+  chrome.storage.local.get('pithSession', (result) => {
+    sessionToken = result.pithSession?.accessToken ?? null;
+  });
+}
 
 // Concise response instructions — ~15 tokens that save hundreds on output
 const RESPONSE_HINT_QUERY = '\n[Answer in 1-3 sentences. No intro/outro. No "Great question". Skip what I already know.]';
@@ -28,6 +38,9 @@ if (typeof chrome !== 'undefined' && chrome.storage?.local) {
     }
     if (changes.outputCompress) {
       outputCompress = changes.outputCompress.newValue !== false;
+    }
+    if (changes.pithSession) {
+      sessionToken = changes.pithSession.newValue?.accessToken ?? null;
     }
   });
 }
@@ -75,6 +88,12 @@ document.addEventListener('keydown', (e) => {
   if (!text.trim() || text.length < 30) return;
   if (isCodeHeavy(text)) return;
 
+  // Require login
+  if (!sessionToken) {
+    showBadge('PITH: faça login', '#f59e0b');
+    return;
+  }
+
   // Compress
   const { output, noiseRemoved, isQuery } = engine.optimize(text);
 
@@ -96,9 +115,8 @@ document.addEventListener('keydown', (e) => {
     setContentEditableText(el as HTMLElement, finalOutput);
   }
 
-  // Save token savings
-  const tokensSaved = Math.max(0, Math.floor((text.length - finalOutput.length) / 4));
-  saveTokens(tokensSaved);
+  // Log usage to backend (fire-and-forget)
+  logUsage(text);
 
   // Wait for framework to process the text change, then re-send
   requestAnimationFrame(() => {
@@ -157,6 +175,12 @@ document.addEventListener('click', (e) => {
   if (!text.trim() || text.length < 30) return;
   if (isCodeHeavy(text)) return;
 
+  // Require login
+  if (!sessionToken) {
+    showBadge('PITH: faça login', '#f59e0b');
+    return;
+  }
+
   const { output, noiseRemoved, isQuery } = engine.optimize(text);
   if (noiseRemoved < 5) return;
 
@@ -171,8 +195,8 @@ document.addEventListener('click', (e) => {
     setContentEditableText(input as HTMLElement, finalOutput);
   }
 
-  const tokensSaved = Math.max(0, Math.floor((text.length - finalOutput.length) / 4));
-  saveTokens(tokensSaved);
+  // Log usage to backend (fire-and-forget)
+  logUsage(text);
 
   // Small delay to let the text update propagate, then re-click
   e.preventDefault();
@@ -240,8 +264,7 @@ function compressAIResponse(el: HTMLElement): void {
   processedResponses.add(el);
 
   const originalHTML = el.innerHTML;
-  const tokensSaved = Math.max(0, Math.floor((text.length - output.length) / 4));
-  saveTokens(tokensSaved);
+  logUsage(text);
 
   // Wrapper
   const wrapper = document.createElement('div');
@@ -395,14 +418,14 @@ function isCodeHeavy(text: string): boolean {
   return codeLines / lines.length > 0.5;
 }
 
-// Save token savings to chrome.storage
-function saveTokens(tokens: number) {
-  if (typeof chrome === 'undefined' || !chrome.storage?.local) return;
-
-  chrome.storage.local.get(['distilledTokens'], (result) => {
-    const current = result.distilledTokens || 0;
-    chrome.storage.local.set({ distilledTokens: current + tokens });
-  });
+// Log usage to backend (fire-and-forget)
+function logUsage(originalText: string) {
+  if (!sessionToken || !API_URL) return;
+  fetch(`${API_URL}/v1/optimize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
+    body: JSON.stringify({ text: originalText }),
+  }).catch(() => { /* ignore errors — don't block UX */ });
 }
 
 // Show a transient badge notification

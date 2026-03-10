@@ -11,11 +11,12 @@ const app = new Hono();
 
 app.use('*', logger());
 app.use('*', cors({
-  origin: [
-    'chrome-extension://*',
-    'https://pith.app',
-    'http://localhost:3000',
-  ],
+  origin: (origin) => {
+    if (!origin) return '*';
+    if (origin.startsWith('chrome-extension://')) return origin;
+    if (['https://pith.app', 'http://localhost:3000'].includes(origin)) return origin;
+    return null;
+  },
   allowHeaders: ['Authorization', 'Content-Type'],
 }));
 

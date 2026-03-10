@@ -12,7 +12,7 @@ const ONBOARDING_EXAMPLE = `Olá, tudo bem? Gostaria de pedir um favor. Eu estav
 
 // ── Auth Form (login / cadastro) ──────────────────────────────────────────────
 
-function AuthForm({ onSuccess, onClose }: { onSuccess: (s: Session) => void; onClose: () => void }) {
+function AuthForm({ onSuccess, onClose, required }: { onSuccess: (s: Session) => void; onClose: () => void; required?: boolean }) {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -47,9 +47,11 @@ function AuthForm({ onSuccess, onClose }: { onSuccess: (s: Session) => void; onC
           <h2 className="text-base font-bold text-slate-100">
             {mode === 'login' ? 'Entrar no PITH' : 'Criar conta'}
           </h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-300">
-            <X size={16} />
-          </button>
+          {!required && (
+            <button onClick={onClose} className="text-slate-500 hover:text-slate-300">
+              <X size={16} />
+            </button>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
@@ -188,29 +190,36 @@ export default function App() {
         setResponseBoost(result.responseBoost !== false);
         setOutputCompress(result.outputCompress !== false);
         setHasSeenOnboarding(result.hasSeenOnboarding === true);
-      });
-      loadSession().then((s) => {
-        if (s) { setSession(s); fetchBackendStats(s); }
+
+        loadSession().then(async (s) => {
+          if (!s) { setShowAuthForm(true); return; }
+          // Sync any locally accumulated tokens before fetching stats
+          const user = await syncAndFetch(s, tokens);
+          setSession({ ...s, tier: user?.tier ?? 'free' });
+        });
       });
     } else {
       setHasSeenOnboarding(true);
     }
   }, []);
 
-  const fetchBackendStats = async (s: Session) => {
-    try {
-      const [stats, user] = await Promise.all([api.stats(s.accessToken), api.user(s.accessToken)]);
-      setBackendStats(stats);
-      setSession((prev) => prev ? { ...prev, tier: user.tier } : prev);
-    } catch { /* offline / token expired */ }
+  const syncAndFetch = async (s: Session, localTokens: number) => {
+    if (localTokens > 0) {
+      await api.syncLocal(s.accessToken, localTokens).catch(() => {});
+      // Reset local counter after sync to avoid double-counting
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        chrome.storage.local.set({ distilledTokens: 0 });
+      }
+      setSavings({ distilledTokens: 0, dollars: 0 });
+    }
+    const [stats, user] = await Promise.all([api.stats(s.accessToken), api.user(s.accessToken)]).catch(() => [null, null]) as [BackendStats | null, { tier: 'free' | 'pro' } | null];
+    if (stats) setBackendStats(stats);
+    return user;
   };
 
   const handleAuthSuccess = async (s: Session) => {
     setShowAuthForm(false);
-    const localTokens = savings.distilledTokens;
-    if (localTokens > 0) await api.syncLocal(s.accessToken, localTokens).catch(() => {});
-    const [stats, user] = await Promise.all([api.stats(s.accessToken), api.user(s.accessToken)]).catch(() => [null, null]) as [BackendStats | null, { tier: 'free' | 'pro' } | null];
-    if (stats) setBackendStats(stats);
+    const user = await syncAndFetch(s, savings.distilledTokens);
     setSession({ ...s, tier: user?.tier ?? 'free' });
   };
 
@@ -271,7 +280,7 @@ export default function App() {
   return (
     <div className="relative w-[500px] min-h-[500px] bg-slate-900 text-slate-100 p-5 font-sans flex flex-col">
       {showAuthForm && (
-        <AuthForm onSuccess={handleAuthSuccess} onClose={() => setShowAuthForm(false)} />
+        <AuthForm onSuccess={handleAuthSuccess} onClose={() => setShowAuthForm(false)} required={!session} />
       )}
 
       <header className="flex justify-between items-center mb-4 border-b border-slate-800 pb-4">

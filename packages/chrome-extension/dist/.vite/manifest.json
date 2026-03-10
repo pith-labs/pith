@@ -1,6 +1,6 @@
 {
   "../../../../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-BUpDzxaA.js",
+    "file": "assets/crx-manifest.js-hxBS_hul.js",
     "name": "crx-manifest.js",
     "src": "../../../../../../../@crx/manifest",
     "isEntry": true
@@ -10,11 +10,11 @@
     "name": "PithEngine"
   },
   "content.ts-loader.js": {
-    "file": "assets/content.ts-loader-LwSpup8V.js",
+    "file": "assets/content.ts-loader-C9x6fT3f.js",
     "src": "content.ts-loader.js"
   },
   "index.html": {
-    "file": "assets/index.html-Czu_KOSB.js",
+    "file": "assets/index.html-C5P-UE49.js",
     "name": "index.html",
     "src": "index.html",
     "isEntry": true,
@@ -26,7 +26,7 @@
     ]
   },
   "src/content/content.ts": {
-    "file": "assets/content.ts-YEwkPN7G.js",
+    "file": "assets/content.ts-BxkhSFDk.js",
     "name": "content.ts",
     "src": "src/content/content.ts",
     "isEntry": true,

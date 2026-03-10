@@ -7,6 +7,9 @@
   "permissions": [
     "storage"
   ],
+  "host_permissions": [
+    "https://pith.onrender.com/*"
+  ],
   "action": {
     "default_popup": "index.html",
     "default_title": "PITH Dashboard"
