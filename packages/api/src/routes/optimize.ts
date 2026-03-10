@@ -33,10 +33,3 @@ optimizeRouter.post('/', auth, rateLimit, zValidator('json', schema), async (c) 
   return c.json({ output, noiseRemoved, tokensSaved, isQuery });
 });
 
-// POST /v1/optimize/anonymous — no auth, no storage, for onboarding/demo
-optimizeRouter.post('/anonymous', zValidator('json', schema), async (c) => {
-  const { text } = c.req.valid('json');
-  const { output, noiseRemoved, isQuery } = engine.optimize(text);
-  const tokensSaved = Math.max(0, Math.floor((text.length - output.length) / 4));
-  return c.json({ output, noiseRemoved, tokensSaved, isQuery });
-});

@@ -109,29 +109,3 @@ describe('POST /v1/optimize', () => {
   });
 });
 
-describe('POST /v1/optimize/anonymous', () => {
-  it('compresses without auth and returns valid output', async () => {
-    const res = await makeApp().request('/anonymous', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: 'Can you please help me understand how React hooks work in a simple and easy to understand way?',
-      }),
-    });
-
-    expect(res.status).toBe(200);
-    const body = await res.json() as any;
-    expect(body.output).toBeTruthy();
-    expect(body.noiseRemoved).toBeGreaterThanOrEqual(0);
-  });
-
-  it('anonymous does NOT log to usage_logs', async () => {
-    mockFrom.mockClear();
-    await makeApp().request('/anonymous', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: 'Short anonymous query for testing.' }),
-    });
-    expect(mockFrom).not.toHaveBeenCalledWith('usage_logs');
-  });
-});
