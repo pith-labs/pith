@@ -1,19 +1,19 @@
 {
   "manifest_version": 3,
-  "name": "LENS",
-  "version": "2.0.0",
-  "description": "LENS - Invisible AI Prompt Compressor",
+  "name": "PITH",
+  "version": "2.1.0",
+  "description": "PITH - Invisible AI Prompt Compressor. Remove noise, save tokens.",
   "permissions": [
     "storage"
   ],
   "action": {
     "default_popup": "index.html",
-    "default_title": "LENS Dashboard"
+    "default_title": "PITH Dashboard"
   },
   "content_scripts": [
     {
       "js": [
-        "assets/content.ts-loader-BGDbVwc-.js"
+        "assets/content.ts-loader-D8JSjDxm.js"
       ],
       "matches": [
         "https://chatgpt.com/*",
@@ -29,12 +29,12 @@
     }
   ],
   "commands": {
-    "toggle-lens": {
+    "toggle-pith": {
       "suggested_key": {
         "default": "Ctrl+Shift+L",
         "mac": "Command+Shift+L"
       },
-      "description": "Toggle Pith on/off"
+      "description": "Toggle PITH on/off"
     }
   },
   "web_accessible_resources": [
@@ -50,8 +50,8 @@
         "https://you.com/*"
       ],
       "resources": [
-        "assets/PithEngine-GWXMN-Hu.js",
-        "assets/content.ts-DZ9aoj5j.js"
+        "assets/PithEngine-BYNi4Op8.js",
+        "assets/content.ts-CFFsiI14.js"
       ],
       "use_dynamic_url": false
     }
