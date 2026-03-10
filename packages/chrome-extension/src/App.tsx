@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Copy, TerminalSquare, Zap } from 'lucide-react';
-import { PithEngine } from './core/PithEngine';
+import { PithEngine } from '@pith/core';
 
 const engine = new PithEngine();
 

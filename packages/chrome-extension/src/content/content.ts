@@ -1,4 +1,4 @@
-import { PithEngine } from '../core/PithEngine';
+import { PithEngine } from '@pith/core';
 
 const engine = new PithEngine();
 let lensEnabled = true;
