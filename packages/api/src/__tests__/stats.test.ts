@@ -13,13 +13,28 @@ const { mockFrom } = vi.hoisted(() => {
       return {
         select:      vi.fn().mockReturnThis(),
         eq:          vi.fn().mockReturnThis(),
-        single:      vi.fn().mockResolvedValue({ data: MONTHLY, error: null }),
         maybeSingle: vi.fn().mockResolvedValue({ data: MONTHLY, error: null }),
+      };
+    }
+    if (table === 'lifetime_usage') {
+      return {
+        select:      vi.fn().mockReturnThis(),
+        eq:          vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ 
+          data: { 
+            total_compressions: 2, 
+            total_tokens_saved: 300, 
+            total_noise_removed: 75 
+          }, 
+          error: null 
+        }),
       };
     }
     return {
       select: vi.fn().mockReturnThis(),
-      eq:     vi.fn().mockResolvedValue({ data: LOGS, error: null }),
+      eq:     vi.fn().mockReturnThis(),
+      order:  vi.fn().mockReturnThis(),
+      range:  vi.fn().mockResolvedValue({ data: LOGS, count: 2, error: null }),
     };
   });
   return { mockFrom };
@@ -56,29 +71,51 @@ describe('GET /v1/stats', () => {
   });
 
   it('totalTokensSaved = sum of all logs', async () => {
-    const body = await makeApp().request('/').then(r => r.json()) as any;
+    const res = await makeApp().request('/');
+    const body = await res.json() as any;
     expect(body.totalTokensSaved).toBe(300);
   });
 
-  it('totalCompressions = number of log rows', async () => {
-    const body = await makeApp().request('/').then(r => r.json()) as any;
+  it('totalCompressions comes from lifetime_usage', async () => {
+    const res = await makeApp().request('/');
+    const body = await res.json() as any;
     expect(body.totalCompressions).toBe(2);
   });
 
   it('dollarsSaved = totalTokens / 1M * 15', async () => {
-    const body = await makeApp().request('/').then(r => r.json()) as any;
+    const res = await makeApp().request('/');
+    const body = await res.json() as any;
     const expected = parseFloat(((300 / 1_000_000) * 15).toFixed(2));
     expect(body.dollarsSaved).toBe(expected);
   });
 
   it('avgNoiseRemoved = mean of noise_removed', async () => {
-    const body = await makeApp().request('/').then(r => r.json()) as any;
+    const res = await makeApp().request('/');
+    const body = await res.json() as any;
     expect(body.avgNoiseRemoved).toBe(38); // (30+45)/2 rounded
   });
 
   it('monthlyCompressions comes from monthly_usage view', async () => {
-    const body = await makeApp().request('/').then(r => r.json()) as any;
+    const res = await makeApp().request('/');
+    const body = await res.json() as any;
     expect(body.monthlyCompressions).toBe(MONTHLY.compressions);
     expect(body.monthlyTokensSaved).toBe(MONTHLY.tokens_saved_month);
+  });
+});
+
+describe('GET /v1/stats/logs', () => {
+  it('returns paginated data', async () => {
+    const res = await makeApp().request('/logs?page=1&limit=10');
+    expect(res.status).toBe(200);
+    const body = await res.json() as any;
+    expect(body.data).toHaveLength(2);
+    expect(body.meta.total).toBe(2);
+    expect(body.meta.page).toBe(1);
+    expect(body.meta.limit).toBe(10);
+  });
+  
+  it('rejects invalid pagination params', async () => {
+    const res = await makeApp().request('/logs?page=-1&limit=500');
+    expect(res.status).toBe(400); // Zod validation should catch this
   });
 });

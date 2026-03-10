@@ -54,7 +54,7 @@ describe('GET /v1/user', () => {
     const body = await res.json() as any;
     expect(body.id).toBe('user-test-123');
     expect(body.tier).toBe('free');
-    expect(body.apiKey).toBe(API_KEY.key);
+    expect(body.hasApiKey).toBe(true);
   });
 });
 

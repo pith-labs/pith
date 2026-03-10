@@ -18,14 +18,16 @@ export const optimizeRouter = new Hono();
 optimizeRouter.post('/', auth, rateLimit, zValidator('json', schema), async (c) => {
   const { text } = c.req.valid('json');
   const userId   = c.get('userId');
+  const apiKeyId = c.get('apiKeyId');
 
   const { output, noiseRemoved, isQuery } = engine.optimize(text);
   const tokensSaved = Math.max(0, Math.floor((text.length - output.length) / 4));
 
   // Log usage async (don't block response)
   db.from('usage_logs').insert({
-    user_id:      userId,
-    tokens_saved: tokensSaved,
+    user_id:       userId,
+    api_key_id:    apiKeyId || null,
+    tokens_saved:  tokensSaved,
     noise_removed: noiseRemoved,
     input_length:  text.length,
   }).then();

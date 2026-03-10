@@ -25,6 +25,7 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
 CREATE TABLE IF NOT EXISTS usage_logs (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id        UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  api_key_id     UUID REFERENCES api_keys(id) ON DELETE SET NULL, -- Track which key was used (null if session auth)
   tokens_saved   INT NOT NULL,
   noise_removed  INT NOT NULL,
   input_length   INT NOT NULL,
@@ -35,7 +36,7 @@ CREATE TABLE IF NOT EXISTS usage_logs (
 CREATE TABLE IF NOT EXISTS api_keys (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  key         TEXT UNIQUE NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex'),
+  key_hash    TEXT UNIQUE NOT NULL, -- Storing SHA-256 hash instead of raw key
   name        TEXT NOT NULL DEFAULT 'Default',
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
@@ -48,6 +49,16 @@ CREATE OR REPLACE VIEW monthly_usage AS
     SUM(tokens_saved)   AS tokens_saved_month
   FROM usage_logs
   WHERE created_at >= date_trunc('month', NOW())
+  GROUP BY user_id;
+
+-- View: lifetime aggregated stats per user (prevents loading all logs into memory)
+CREATE OR REPLACE VIEW lifetime_usage AS
+  SELECT
+    user_id,
+    COUNT(*)            AS total_compressions,
+    SUM(tokens_saved)   AS total_tokens_saved,
+    SUM(noise_removed)  AS total_noise_removed
+  FROM usage_logs
   GROUP BY user_id;
 
 -- RLS
