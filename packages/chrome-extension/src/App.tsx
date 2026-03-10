@@ -352,7 +352,7 @@ export default function App() {
         <div className="flex flex-col gap-1 mt-2">
           <div className="flex justify-between items-end">
             <label className="text-sm font-semibold text-slate-300 flex items-center gap-3">
-              Linguagem de Máquina (PITH)
+              PITH
               <span className={`text-xs font-mono text-emerald-400 flex items-center gap-1 transition-opacity duration-300 ${isDistilling ? 'opacity-100 animate-pulse' : 'opacity-0'}`}>
                 <Zap size={14} className="fill-emerald-400" />
                 Destilando...
