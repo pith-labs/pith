@@ -2,7 +2,7 @@
   "name": "pith-vscode",
   "displayName": "Pith",
   "description": "Zero-G prompt compressor and distiller for LLMs",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "publisher": "angelo-castro",
   "engines": {
     "vscode": "^1.90.0"

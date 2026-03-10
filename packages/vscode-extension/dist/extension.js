@@ -170,16 +170,24 @@ var PithEngine = class _PithEngine {
     }
     return freq;
   }
-  scoreWord(word, freq, totalWords, isFirstInLine, isSentenceStart = false) {
+  scoreWord(word, freq, totalWords, isFirstInLine, isSentenceStart = false, isQuestion = false) {
     if (/\d/.test(word))
       return 100;
-    if (/[^a-zA-ZÀ-ÿ\s.,;:!?'"]/.test(word))
+    if (/[^a-zA-ZÀ-ÿ\s.,;:!?'"/-]/.test(word))
       return 100;
-    const clean = word.replace(/[^a-zA-ZÀ-ÿ]/g, "");
+    const clean = word.replace(/[^a-zA-ZÀ-ÿ-]/g, "");
     if (!clean)
       return 0;
     let score = 0;
     score += Math.min(clean.length, 8);
+    if (clean.length === 3) {
+      if (!/[aeiouà-ú]/i.test(clean))
+        score += 3;
+      if (isQuestion)
+        score += 2;
+      if (/^(bom|mal|bad|boa|bug|api|app|web)$/i.test(clean))
+        score += 5;
+    }
     if (/^[A-Z][A-Z0-9]+$/.test(clean)) {
       score += 8;
     } else if (/^[A-ZÀ-Ý]/.test(clean) && !isSentenceStart) {
@@ -260,26 +268,36 @@ var PithEngine = class _PithEngine {
       "minutes": "min"
     };
     const skipIndices = /* @__PURE__ */ new Set();
+    const negationRegex = /^(não|nao|not|never|sem|without|nem)$/i;
+    let negateNext = false;
+    const isQuestion = workText.endsWith("?");
     for (let i = 0; i < words.length; i++) {
       if (skipIndices.has(i))
         continue;
-      const clean = words[i].replace(/[^a-zA-ZÀ-ÿ0-9]/g, "");
+      const clean = words[i].replace(/[^a-zA-ZÀ-ÿ0-9-]/g, "");
       if (!clean)
         continue;
       if (_PithEngine.INTENT_TAGS.has(clean.toLowerCase()))
         continue;
+      if (negationRegex.test(clean)) {
+        negateNext = !negateNext;
+        continue;
+      }
       if (/^\d+$/.test(clean) && i + 1 < words.length) {
-        const nextClean = words[i + 1].replace(/[^a-zA-ZÀ-ÿ]/g, "").toLowerCase();
+        const nextClean = words[i + 1].replace(/[^a-zA-ZÀ-ÿ-]/g, "").toLowerCase();
         if (unitMap[nextClean]) {
-          survivors.push({ word: clean + unitMap[nextClean], score: 100, origIdx: i });
+          const finalWord = negateNext ? "-" + clean + unitMap[nextClean] : clean + unitMap[nextClean];
+          survivors.push({ word: finalWord, score: 100, origIdx: i });
+          negateNext = false;
           skipIndices.add(i + 1);
           continue;
         }
       }
       const isSentenceStart = sentenceStarts.has(i);
-      const score = this.scoreWord(words[i], freq, totalWords, i === 0, isSentenceStart);
+      const score = this.scoreWord(words[i], freq, totalWords, i === 0, isSentenceStart, isQuestion);
       if (score >= _PithEngine.QUERY_THRESHOLD) {
-        survivors.push({ word: clean, score, origIdx: i });
+        survivors.push({ word: negateNext ? "-" + clean : clean, score, origIdx: i });
+        negateNext = false;
       }
     }
     for (let si = 0; si < survivors.length; si++) {
@@ -381,9 +399,11 @@ var PithEngine = class _PithEngine {
     return r;
   }
   // Score-based line-by-line filtering
-  scoreFilterLines(text, freq, totalWords, threshold) {
+  scoreFilterLines(text, freq, totalWords, defaultThreshold) {
     const lines = text.split("\n");
     const result = [];
+    const isQuestionLine = (line) => line.trim().endsWith("?");
+    const negationRegex = /^(não|nao|not|never|sem|without|nem)$/i;
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) {
@@ -395,28 +415,45 @@ var PithEngine = class _PithEngine {
         result.push(trimmed);
         continue;
       }
+      const isQuestion = isQuestionLine(trimmed);
       const bulletMatch = trimmed.match(/^([-•–]\s+|\d+\.\s+)(.*)/);
       const marker = bulletMatch ? bulletMatch[1] : "";
       const content = bulletMatch ? bulletMatch[2] : trimmed;
       const words = content.split(/\s+/);
-      const kept = [];
-      const lineStarts = /* @__PURE__ */ new Set([0]);
-      for (let i = 0; i < words.length; i++) {
-        if (/[.!?]$/.test(words[i]) && i + 1 < words.length)
-          lineStarts.add(i + 1);
-      }
-      for (let i = 0; i < words.length; i++) {
-        const w = words[i];
-        if (w.includes("\0")) {
-          kept.push(w);
-          continue;
+      const tryFilter = (threshold) => {
+        const kept = [];
+        let negateNext = false;
+        const lineStarts = /* @__PURE__ */ new Set([0]);
+        for (let i = 0; i < words.length; i++) {
+          if (/[.!?]$/.test(words[i]) && i + 1 < words.length)
+            lineStarts.add(i + 1);
         }
-        const isSentStart = lineStarts.has(i);
-        const score = this.scoreWord(w, freq, totalWords, i === 0 && !marker, isSentStart);
-        if (score >= threshold)
-          kept.push(w);
+        for (let i = 0; i < words.length; i++) {
+          const w = words[i];
+          if (w.includes("\0")) {
+            kept.push(negateNext ? "-" + w : w);
+            negateNext = false;
+            continue;
+          }
+          const wClean = w.replace(/[^a-zA-ZÀ-ÿ0-9-]/g, "");
+          if (wClean && negationRegex.test(wClean)) {
+            negateNext = !negateNext;
+            continue;
+          }
+          const isSentStart = lineStarts.has(i);
+          const score = this.scoreWord(w, freq, totalWords, i === 0 && !marker, isSentStart, isQuestion);
+          if (score >= threshold) {
+            kept.push(negateNext ? "-" + w : w);
+            negateNext = false;
+          }
+        }
+        return kept;
+      };
+      let keptWords = tryFilter(defaultThreshold);
+      if (keptWords.length <= 1 && words.length >= 3) {
+        keptWords = tryFilter(2);
       }
-      const compressed = kept.join(" ").replace(/\s{2,}/g, " ").trim();
+      const compressed = keptWords.join(" ").replace(/\s{2,}/g, " ").trim();
       if (compressed)
         result.push(marker + compressed);
     }

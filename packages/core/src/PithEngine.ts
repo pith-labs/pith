@@ -99,12 +99,13 @@ export class PithEngine {
     totalWords: number,
     isFirstInLine: boolean,
     isSentenceStart: boolean = false,
+    isQuestion: boolean = false
   ): number {
     // Always preserve tokens with symbols/digits (technical content)
     if (/\d/.test(word)) return 100;
-    if (/[^a-zA-ZÀ-ÿ\s.,;:!?'"]/.test(word)) return 100;
+    if (/[^a-zA-ZÀ-ÿ\s.,;:!?'"/-]/.test(word)) return 100; // Allow hyphens for hyphenated tech words
 
-    const clean = word.replace(/[^a-zA-ZÀ-ÿ]/g, '');
+    const clean = word.replace(/[^a-zA-ZÀ-ÿ-]/g, '');
     if (!clean) return 0;
 
     let score = 0;
@@ -112,9 +113,14 @@ export class PithEngine {
     // 1. Length signal — longer words carry more semantic weight
     score += Math.min(clean.length, 8);
 
+    // 1.5 Short semantic lifeline: Give a baseline bump to 3-letter words if they seem important
+    if (clean.length === 3) {
+      if (!/[aeiouà-ú]/i.test(clean)) score += 3; // Acronyms/Tech terms (e.g. jwt, npm, sql)
+      if (isQuestion) score += 2; // In questions, short words like 'how', 'que', 'why' matter more
+      if (/^(bom|mal|bad|boa|bug|api|app|web)$/i.test(clean)) score += 5; // Vital short nouns/adjectives
+    }
+
     // 2. Case signals — capitalization indicates entities/importance
-    //    Sentence-start words get NO cap bonus (capitalized by grammar, not meaning)
-    //    ALLCAPS always gets bonus (acronyms: BFF, VIP, PY)
     if (/^[A-Z][A-Z0-9]+$/.test(clean)) {
       score += 8; // Acronym — always important
     } else if (/^[A-ZÀ-Ý]/.test(clean) && !isSentenceStart) {
@@ -128,11 +134,9 @@ export class PithEngine {
     }
 
     // 4. Verb penalty — detected by suffix morphology, not word lists
-    //    Only for words >= 6 chars (avoids false positives: lugar, solar, bar)
     if (clean.length >= 6 && PithEngine.VERB_ENDING.test(clean.toLowerCase())) score -= 3;
 
     // 5. Position bonus — first word in a line is often key context
-    //    But NOT for sentence-start words (they're already at a natural advantage)
     if (isFirstInLine && !isSentenceStart) score += 2;
 
     return score;
@@ -209,30 +213,42 @@ export class PithEngine {
       'minutos': 'min', 'minutes': 'min',
     };
     const skipIndices = new Set<number>();
+    const negationRegex = /^(não|nao|not|never|sem|without|nem)$/i;
+    let negateNext = false;
+    const isQuestion = workText.endsWith('?');
 
     for (let i = 0; i < words.length; i++) {
       if (skipIndices.has(i)) continue;
 
-      const clean = words[i].replace(/[^a-zA-ZÀ-ÿ0-9]/g, '');
+      const clean = words[i].replace(/[^a-zA-ZÀ-ÿ0-9-]/g, '');
       if (!clean) continue;
 
       // Intent trigger words are consumed by the tag
       if (PithEngine.INTENT_TAGS.has(clean.toLowerCase())) continue;
 
+      if (negationRegex.test(clean)) {
+        negateNext = !negateNext;
+        continue;
+      }
+
       // Number + unit fusion: "5 dias" → "5d"
       if (/^\d+$/.test(clean) && i + 1 < words.length) {
-        const nextClean = words[i + 1].replace(/[^a-zA-ZÀ-ÿ]/g, '').toLowerCase();
+        const nextClean = words[i + 1].replace(/[^a-zA-ZÀ-ÿ-]/g, '').toLowerCase();
         if (unitMap[nextClean]) {
-          survivors.push({ word: clean + unitMap[nextClean], score: 100, origIdx: i });
+          const finalWord = negateNext ? '-' + clean + unitMap[nextClean] : clean + unitMap[nextClean];
+          survivors.push({ word: finalWord, score: 100, origIdx: i });
+          negateNext = false;
           skipIndices.add(i + 1);
           continue;
         }
       }
 
       const isSentenceStart = sentenceStarts.has(i);
-      const score = this.scoreWord(words[i], freq, totalWords, i === 0, isSentenceStart);
+      const score = this.scoreWord(words[i], freq, totalWords, i === 0, isSentenceStart, isQuestion);
+      
       if (score >= PithEngine.QUERY_THRESHOLD) {
-        survivors.push({ word: clean, score, origIdx: i });
+        survivors.push({ word: negateNext ? '-' + clean : clean, score, origIdx: i });
+        negateNext = false;
       }
     }
 
@@ -361,9 +377,12 @@ export class PithEngine {
   }
 
   // Score-based line-by-line filtering
-  private scoreFilterLines(text: string, freq: Map<string, number>, totalWords: number, threshold: number): string {
+  private scoreFilterLines(text: string, freq: Map<string, number>, totalWords: number, defaultThreshold: number): string {
     const lines = text.split('\n');
     const result: string[] = [];
+
+    const isQuestionLine = (line: string) => line.trim().endsWith('?');
+    const negationRegex = /^(não|nao|not|never|sem|without|nem)$/i;
 
     for (const line of lines) {
       const trimmed = line.trim();
@@ -380,31 +399,56 @@ export class PithEngine {
         continue;
       }
 
-      // Extract bullet marker if present
+      const isQuestion = isQuestionLine(trimmed);
       const bulletMatch = trimmed.match(/^([-•–]\s+|\d+\.\s+)(.*)/);
       const marker = bulletMatch ? bulletMatch[1] : '';
       const content = bulletMatch ? bulletMatch[2] : trimmed;
-
-      // Score each word, keep survivors
       const words = content.split(/\s+/);
-      const kept: string[] = [];
 
-      // Detect sentence starts within the line
-      const lineStarts = new Set<number>([0]);
-      for (let i = 0; i < words.length; i++) {
-        if (/[.!?]$/.test(words[i]) && i + 1 < words.length) lineStarts.add(i + 1);
+      // We run the filter logic in a closure so we can retry with a lower threshold if needed
+      const tryFilter = (threshold: number) => {
+        const kept: string[] = [];
+        let negateNext = false;
+
+        const lineStarts = new Set<number>([0]);
+        for (let i = 0; i < words.length; i++) {
+          if (/[.!?]$/.test(words[i]) && i + 1 < words.length) lineStarts.add(i + 1);
+        }
+
+        for (let i = 0; i < words.length; i++) {
+          const w = words[i];
+          if (w.includes('\u0000')) {
+            kept.push(negateNext ? '-' + w : w);
+            negateNext = false;
+            continue; 
+          } // placeholders
+
+          const wClean = w.replace(/[^a-zA-ZÀ-ÿ0-9-]/g, '');
+          if (wClean && negationRegex.test(wClean)) {
+            negateNext = !negateNext; // toggle to handle double negatives natively, or just set to true
+            continue; // Skip the negation word itself
+          }
+
+          const isSentStart = lineStarts.has(i);
+          const score = this.scoreWord(w, freq, totalWords, i === 0 && !marker, isSentStart, isQuestion);
+          
+          if (score >= threshold) {
+            kept.push(negateNext ? '-' + w : w);
+            negateNext = false; // reset after binding
+          }
+        }
+        return kept;
+      };
+
+      let keptWords = tryFilter(defaultThreshold);
+
+      // 3. Fallback Inteligente: If we decimated a sentence (only 1 or 0 words left),
+      // and the original had 3+ words, lower the threshold heavily to rescue context.
+      if (keptWords.length <= 1 && words.length >= 3) {
+        keptWords = tryFilter(2); // Rescue threshold
       }
 
-      for (let i = 0; i < words.length; i++) {
-        const w = words[i];
-        if (w.includes('\u0000')) { kept.push(w); continue; } // placeholders
-
-        const isSentStart = lineStarts.has(i);
-        const score = this.scoreWord(w, freq, totalWords, i === 0 && !marker, isSentStart);
-        if (score >= threshold) kept.push(w);
-      }
-
-      const compressed = kept.join(' ').replace(/\s{2,}/g, ' ').trim();
+      const compressed = keptWords.join(' ').replace(/\s{2,}/g, ' ').trim();
       if (compressed) result.push(marker + compressed);
     }
 
