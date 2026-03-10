@@ -1,12 +1,11 @@
 {
   "manifest_version": 3,
   "name": "PITH",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt1aVLvUUq/15ZJMBg8f7li6yxFC5c2lsUayBh2BmtUl5dKWPSULiXxoLyhc0Itr73v0nbYIIEfIoyp9CwySRF96ObwnN6ICOE0+uYAzliGyf+LXuGsrz94Towk58LWLqGx4wQin/ESL2x8O+rI3VgWRmSIl3fmYCYaFAOIAhc5adN7iPxfkIMyFxuh4OTLrz9QH+BtoJbbxtyg8AllfCHoLCK4B9ASdHWhq6x/Eor/HaLynmzQHieTumbltbEqsdReHyIh8IJdhemxBxD1CH99Qmx9nETCRilIIdI95+syb7vktZW/+anZypVpkTDPPl8Kx/wdNiY/PbPcKu80iBDQIDAQAB",
   "version": "2.1.0",
   "description": "PITH - Invisible AI Prompt Compressor. Remove noise, save tokens.",
   "permissions": [
-    "storage",
-    "identity",
-    "tabs"
+    "storage"
   ],
   "action": {
     "default_popup": "index.html",

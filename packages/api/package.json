@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "node --env-file=.env --import tsx/esm src/index.ts",
     "build": "echo 'No build step — tsx runs TS directly'",
     "start": "tsx src/index.ts",
     "test": "vitest run",

@@ -1,15 +1,11 @@
 import { supabase } from './supabase.js';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-
 export interface Session {
   accessToken: string;
   userId: string;
   email: string;
   tier: 'free' | 'pro';
 }
-
-// ── Persist / load session via chrome.storage ─────────────────────────────────
 
 export async function saveSession(session: Session): Promise<void> {
   await chrome.storage.local.set({ pithSession: session });
@@ -24,54 +20,36 @@ export async function clearSession(): Promise<void> {
   await chrome.storage.local.remove('pithSession');
 }
 
-// ── Google OAuth via chrome.identity ─────────────────────────────────────────
-// chrome.identity.launchWebAuthFlow opens a secure browser window and handles
-// the redirect without exposing tokens to arbitrary web pages.
+export async function signUp(email: string, password: string): Promise<Session> {
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  if (error) throw new Error(error.message);
+  if (!data.session) throw new Error('Confirme seu email para ativar a conta.');
 
-export async function loginWithGoogle(): Promise<Session> {
-  const redirectUrl = chrome.identity.getRedirectURL(); // e.g. https://<id>.chromiumapp.org/
+  const session: Session = {
+    accessToken: data.session.access_token,
+    userId: data.user!.id,
+    email: data.user!.email ?? email,
+    tier: 'free',
+  };
+  await saveSession(session);
+  return session;
+}
 
-  const authUrl =
-    `${SUPABASE_URL}/auth/v1/authorize` +
-    `?provider=google` +
-    `&redirect_to=${encodeURIComponent(redirectUrl)}`;
+export async function login(email: string, password: string): Promise<Session> {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(error.message);
 
-  return new Promise((resolve, reject) => {
-    chrome.identity.launchWebAuthFlow(
-      { url: authUrl, interactive: true },
-      async (responseUrl) => {
-        if (chrome.runtime.lastError || !responseUrl) {
-          return reject(new Error(chrome.runtime.lastError?.message ?? 'Auth cancelled'));
-        }
-
-        // Supabase puts the tokens in the URL hash: #access_token=...&...
-        const hash = new URL(responseUrl).hash.slice(1);
-        const params = new URLSearchParams(hash);
-        const accessToken  = params.get('access_token');
-        const refreshToken = params.get('refresh_token');
-
-        if (!accessToken) return reject(new Error('No access token in redirect'));
-
-        // Set session so supabase.auth.getUser works
-        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken ?? '' });
-        const { data: { user }, error } = await supabase.auth.getUser(accessToken);
-
-        if (error || !user) return reject(new Error('Failed to get user'));
-
-        const session: Session = {
-          accessToken,
-          userId: user.id,
-          email:  user.email ?? '',
-          tier:   'free', // will be updated after sync
-        };
-
-        await saveSession(session);
-        resolve(session);
-      }
-    );
-  });
+  const session: Session = {
+    accessToken: data.session.access_token,
+    userId: data.user.id,
+    email: data.user.email ?? email,
+    tier: 'free',
+  };
+  await saveSession(session);
+  return session;
 }
 
 export async function logout(): Promise<void> {
+  await supabase.auth.signOut();
   await clearSession();
 }
