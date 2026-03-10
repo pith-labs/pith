@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Copy, TerminalSquare, Zap, Share2, LogIn, LogOut, Crown } from 'lucide-react';
+
 import { PithEngine } from '@pith/core';
 import { loginWithGoogle, loadSession, logout as doLogout, type Session } from './lib/auth.js';
 import { api, type BackendStats } from './lib/api.js';
@@ -163,16 +164,6 @@ export default function App() {
     setBackendStats(null);
   };
 
-  const handleUpgrade = async () => {
-    if (!session) return;
-    try {
-      const { url } = await api.checkout(session.accessToken);
-      if (url) chrome.tabs.create({ url });
-    } catch {
-      // ignore
-    }
-  };
-
   const finishOnboarding = () => {
     setHasSeenOnboarding(true);
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
@@ -317,30 +308,11 @@ export default function App() {
             />
           </div>
           {monthlyUsed >= FREE_MONTHLY_LIMIT && (
-            <button
-              onClick={handleUpgrade}
-              className="w-full py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
-            >
-              <Crown size={12} />
-              Limite atingido — Upgrade para PRO
-            </button>
+            <p className="text-xs text-rose-400 font-mono text-center">Limite mensal atingido.</p>
           )}
         </div>
       )}
 
-      {/* Upgrade CTA for logged-in free users under limit */}
-      {session && !isPro && monthlyUsed < FREE_MONTHLY_LIMIT && (
-        <div className="mb-3 flex items-center justify-between px-3 py-2 rounded-lg bg-amber-900/20 border border-amber-800/40">
-          <span className="text-xs text-amber-400/80">Compressões ilimitadas + API Key</span>
-          <button
-            onClick={handleUpgrade}
-            className="text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors"
-          >
-            <Crown size={11} />
-            Upgrade PRO
-          </button>
-        </div>
-      )}
 
       <div className="flex-1 flex flex-col gap-4">
         <div className="flex flex-col gap-1">

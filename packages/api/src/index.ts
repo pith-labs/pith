@@ -5,7 +5,6 @@ import { serve } from '@hono/node-server';
 import { optimizeRouter } from './routes/optimize.js';
 import { statsRouter } from './routes/stats.js';
 import { userRouter } from './routes/user.js';
-import { stripeRouter } from './routes/stripe.js';
 import { licenseRouter } from './routes/license.js';
 
 const app = new Hono();
@@ -27,7 +26,6 @@ app.get('/', (c) => c.json({ status: 'ok', version: '1.0.0' }));
 app.route('/v1/optimize', optimizeRouter);
 app.route('/v1/stats',    statsRouter);
 app.route('/v1/user',     userRouter);
-app.route('/v1/stripe',   stripeRouter);
 app.route('/v1/license',  licenseRouter);
 
 // 404

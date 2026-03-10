@@ -49,7 +49,4 @@ export const api = {
       body: JSON.stringify({ tokensSaved }),
     }),
 
-  // Create Stripe Pro checkout session — returns redirect URL
-  checkout: (token: string) =>
-    request<{ url: string }>('/v1/stripe/checkout', token, { method: 'POST' }),
 };

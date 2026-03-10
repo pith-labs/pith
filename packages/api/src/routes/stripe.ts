@@ -3,12 +3,17 @@ import Stripe from 'stripe';
 import { auth } from '../middleware/auth.js';
 import { db } from '../db/client.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-02-24.acacia' });
+// Lazy — only instantiate when STRIPE_SECRET_KEY is present (avoids crash at startup without env)
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY not configured');
+  return new Stripe(key, { apiVersion: '2026-02-25.clover' });
+}
 
 // Price IDs — create these in Stripe Dashboard
 const PRICES = {
-  pro_monthly: process.env.STRIPE_PRICE_PRO_MONTHLY!,   // $7/month recurring
-  api_metered: process.env.STRIPE_PRICE_API_METERED!,   // pay-per-use for B2B
+  get pro_monthly() { return process.env.STRIPE_PRICE_PRO_MONTHLY ?? ''; },
+  get api_metered() { return process.env.STRIPE_PRICE_API_METERED ?? ''; },
 };
 
 export const stripeRouter = new Hono();
@@ -19,7 +24,7 @@ export const stripeRouter = new Hono();
 stripeRouter.post('/checkout', auth, async (c) => {
   const userId = c.get('userId');
 
-  const session = await stripe.checkout.sessions.create({
+  const session = await getStripe().checkout.sessions.create({
     mode: 'subscription',
     line_items: [{ price: PRICES.pro_monthly, quantity: 1 }],
     success_url: `${process.env.APP_URL}/upgrade/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -37,7 +42,7 @@ stripeRouter.post('/checkout', auth, async (c) => {
 stripeRouter.post('/checkout/api', auth, async (c) => {
   const userId = c.get('userId');
 
-  const session = await stripe.checkout.sessions.create({
+  const session = await getStripe().checkout.sessions.create({
     mode: 'subscription',
     line_items: [{ price: PRICES.api_metered }],
     success_url: `${process.env.APP_URL}/api-access/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -56,7 +61,7 @@ stripeRouter.post('/webhook', async (c) => {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!);
+    event = getStripe().webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!);
   } catch {
     return c.json({ error: 'Invalid signature' }, 400);
   }
@@ -107,7 +112,7 @@ stripeRouter.get('/portal', auth, async (c) => {
     return c.json({ error: 'No active subscription' }, 404);
   }
 
-  const session = await stripe.billingPortal.sessions.create({
+  const session = await getStripe().billingPortal.sessions.create({
     customer:   profile.stripe_customer_id,
     return_url: `${process.env.APP_URL}/dashboard`,
   });

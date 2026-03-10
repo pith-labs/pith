@@ -1,7 +1,7 @@
 import { PithEngine } from '@pith/core';
 
 const engine = new PithEngine();
-let lensEnabled = true;
+let pithEnabled = true;
 let responseBoost = true;
 let outputCompress = true;
 
@@ -11,17 +11,17 @@ const RESPONSE_HINT_COMPRESS = '\n[Be concise. No filler. No recap of my input. 
 
 // Load saved state
 if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-  chrome.storage.local.get(['lensEnabled', 'responseBoost', 'outputCompress'], (result) => {
-    lensEnabled = result.lensEnabled !== false;
+  chrome.storage.local.get(['pithEnabled', 'responseBoost', 'outputCompress'], (result) => {
+    pithEnabled = result.pithEnabled !== false;
     responseBoost = result.responseBoost !== false;
     outputCompress = result.outputCompress !== false;
   });
 
   // Listen for toggle from popup or shortcut
   chrome.storage.onChanged.addListener((changes) => {
-    if (changes.lensEnabled) {
-      lensEnabled = changes.lensEnabled.newValue !== false;
-      showBadge(lensEnabled ? 'PITH ON' : 'PITH OFF', lensEnabled ? '#10b981' : '#ef4444');
+    if (changes.pithEnabled) {
+      pithEnabled = changes.pithEnabled.newValue !== false;
+      showBadge(pithEnabled ? 'PITH ON' : 'PITH OFF', pithEnabled ? '#10b981' : '#ef4444');
     }
     if (changes.responseBoost) {
       responseBoost = changes.responseBoost.newValue !== false;
@@ -36,11 +36,11 @@ if (typeof chrome !== 'undefined' && chrome.storage?.local) {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'L' && e.ctrlKey && e.shiftKey) {
     e.preventDefault();
-    lensEnabled = !lensEnabled;
+    pithEnabled = !pithEnabled;
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.set({ lensEnabled });
+      chrome.storage.local.set({ pithEnabled });
     }
-    showBadge(lensEnabled ? 'PITH ON' : 'PITH OFF', lensEnabled ? '#10b981' : '#ef4444');
+    showBadge(pithEnabled ? 'PITH ON' : 'PITH OFF', pithEnabled ? '#10b981' : '#ef4444');
   }
 });
 
@@ -49,7 +49,7 @@ document.addEventListener('keydown', (e) => {
 // ═══════════════════════════════════════════════════
 
 document.addEventListener('keydown', (e) => {
-  if (!lensEnabled) return;
+  if (!pithEnabled) return;
   if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
 
   // Skip our own synthetic events
@@ -134,7 +134,7 @@ document.addEventListener('keydown', (e) => {
 // ═══════════════════════════════════════════════════
 
 document.addEventListener('click', (e) => {
-  if (!lensEnabled) return;
+  if (!pithEnabled) return;
   if ((e as any).__lens) return;
 
   const target = e.target as HTMLElement;
@@ -302,7 +302,7 @@ function scheduleResponseCompression(el: HTMLElement): void {
 }
 
 const responseObserver = new MutationObserver((mutations) => {
-  if (!lensEnabled || !outputCompress) return;
+  if (!pithEnabled || !outputCompress) return;
 
   for (const mutation of mutations) {
     const target = mutation.target as Element;
