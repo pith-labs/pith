@@ -420,12 +420,24 @@ function isCodeHeavy(text: string): boolean {
 
 // Log usage to backend (fire-and-forget)
 function logUsage(originalText: string) {
-  if (!sessionToken || !API_URL) return;
+  if (!API_URL) return;
+  if (!sessionToken) {
+    console.warn('[PITH] logUsage skipped: no session token');
+    return;
+  }
   fetch(`${API_URL}/v1/optimize`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
     body: JSON.stringify({ text: originalText }),
-  }).catch(() => { /* ignore errors — don't block UX */ });
+  }).then(async (res) => {
+    if (res.status === 401) {
+      console.warn('[PITH] token expired — clearing session');
+      sessionToken = null;
+      chrome.storage.local.remove('pithSession');
+    }
+  }).catch((err) => {
+    console.warn('[PITH] logUsage error:', err);
+  });
 }
 
 // Show a transient badge notification
