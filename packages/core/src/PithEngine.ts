@@ -371,6 +371,7 @@ export class PithEngine {
     }
 
     // Fuse consecutive proper nouns: [Elden, Ring] → [EldenRing]
+    // Only fuses words that were originally adjacent (guards against German noun fusion)
     const fused = this.fuseProperNouns(survivors);
 
     // Classify into symbolic tokens by PATTERN (no word lists)
@@ -587,21 +588,24 @@ export class PithEngine {
     return false;
   }
 
-  private fuseProperNouns(items: { word: string; score: number }[]): { word: string; score: number }[] {
-    const result: { word: string; score: number }[] = [];
+  private fuseProperNouns(items: { word: string; score: number; origIdx: number }[]): { word: string; score: number; origIdx: number }[] {
+    const result: { word: string; score: number; origIdx: number }[] = [];
     let i = 0;
 
     while (i < items.length) {
       if (/^[A-ZÀ-Ý][a-zà-ÿ]/.test(items[i].word)) {
         let fused = items[i].word;
         let maxScore = items[i].score;
+        let lastOrigIdx = items[i].origIdx;
         let j = i + 1;
-        while (j < items.length && /^[A-ZÀ-Ý][a-zà-ÿ]/.test(items[j].word)) {
+        // Only fuse if the next word was originally adjacent (prevents German noun fusion)
+        while (j < items.length && /^[A-ZÀ-Ý][a-zà-ÿ]/.test(items[j].word) && items[j].origIdx === lastOrigIdx + 1) {
           fused += items[j].word;
           maxScore = Math.max(maxScore, items[j].score);
+          lastOrigIdx = items[j].origIdx;
           j++;
         }
-        result.push({ word: fused, score: maxScore });
+        result.push({ word: fused, score: maxScore, origIdx: items[i].origIdx });
         i = j;
       } else {
         result.push(items[i]);

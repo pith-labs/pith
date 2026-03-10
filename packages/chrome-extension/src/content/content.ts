@@ -3,6 +3,7 @@ import { PithEngine } from '@pith/core';
 const engine = new PithEngine();
 let lensEnabled = true;
 let responseBoost = true;
+let outputCompress = true;
 
 // Concise response instructions — ~15 tokens that save hundreds on output
 const RESPONSE_HINT_QUERY = '\n[Answer in 1-3 sentences. No intro/outro. No "Great question". Skip what I already know.]';
@@ -10,9 +11,10 @@ const RESPONSE_HINT_COMPRESS = '\n[Be concise. No filler. No recap of my input. 
 
 // Load saved state
 if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-  chrome.storage.local.get(['lensEnabled', 'responseBoost'], (result) => {
-    lensEnabled = result.lensEnabled !== false; // default ON
-    responseBoost = result.responseBoost !== false; // default ON
+  chrome.storage.local.get(['lensEnabled', 'responseBoost', 'outputCompress'], (result) => {
+    lensEnabled = result.lensEnabled !== false;
+    responseBoost = result.responseBoost !== false;
+    outputCompress = result.outputCompress !== false;
   });
 
   // Listen for toggle from popup or shortcut
@@ -23,6 +25,9 @@ if (typeof chrome !== 'undefined' && chrome.storage?.local) {
     }
     if (changes.responseBoost) {
       responseBoost = changes.responseBoost.newValue !== false;
+    }
+    if (changes.outputCompress) {
+      outputCompress = changes.outputCompress.newValue !== false;
     }
   });
 }
@@ -181,6 +186,157 @@ document.addEventListener('click', (e) => {
   });
 
 }, true);
+
+// ═══════════════════════════════════════════════════
+// OUTPUT COMPRESSION: Auto-compress AI responses after streaming
+// ═══════════════════════════════════════════════════
+
+const processedResponses = new WeakSet<HTMLElement>();
+const debounceTimers = new Map<HTMLElement, ReturnType<typeof setTimeout>>();
+
+// Ordered from most specific to most generic per platform
+const ASSISTANT_CONTAINER_SELECTORS = [
+  '[data-message-author-role="assistant"]',  // ChatGPT
+  '[data-testid="bot-message"]',             // Perplexity
+  '.agent-turn',                             // ChatGPT fallback
+  '[data-is-streaming]',                     // Claude.ai
+];
+
+const PROSE_SELECTORS = [
+  '.markdown.prose',       // ChatGPT
+  '.prose',                // Claude.ai, Perplexity
+  '.model-response-text',  // Gemini
+  '.font-claude-message',  // Claude.ai fallback
+];
+
+function findResponseElement(root: Element): HTMLElement | null {
+  // Try finding via assistant container → prose inside it
+  for (const outer of ASSISTANT_CONTAINER_SELECTORS) {
+    const msg = root.matches(outer) ? root : root.querySelector(outer);
+    if (!msg) continue;
+    for (const inner of PROSE_SELECTORS) {
+      const prose = msg.querySelector(inner) as HTMLElement | null;
+      if (prose && (prose.innerText?.trim().length ?? 0) > 150) return prose;
+    }
+  }
+  // Fallback: look for any prose-like element with enough text
+  for (const sel of PROSE_SELECTORS) {
+    const el = root.matches(sel) ? root : root.querySelector(sel);
+    if (el && (el as HTMLElement).innerText?.trim().length > 150) return el as HTMLElement;
+  }
+  return null;
+}
+
+function compressAIResponse(el: HTMLElement): void {
+  if (processedResponses.has(el)) return;
+
+  const text = el.innerText?.trim() ?? '';
+  if (!text || text.length < 150) return;
+  if (isCodeHeavy(text)) return;
+
+  const { output, noiseRemoved } = engine.optimize(text);
+  if (noiseRemoved < 10) return;
+
+  processedResponses.add(el);
+
+  const originalHTML = el.innerHTML;
+  const tokensSaved = Math.max(0, Math.floor((text.length - output.length) / 4));
+  saveTokens(tokensSaved);
+
+  // Wrapper
+  const wrapper = document.createElement('div');
+  wrapper.setAttribute('data-pith-output', 'true');
+
+  // Header row: badge + toggle
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;';
+
+  const badge = document.createElement('span');
+  badge.textContent = `-${noiseRemoved}% PITH`;
+  badge.style.cssText = 'background:#10b981;color:#0f172a;font-size:11px;font-family:monospace;font-weight:bold;padding:2px 8px;border-radius:4px;';
+
+  const toggleBtn = document.createElement('button');
+  toggleBtn.textContent = 'ver original';
+  toggleBtn.style.cssText = 'background:transparent;border:none;color:#64748b;font-size:11px;font-family:monospace;cursor:pointer;text-decoration:underline;padding:0;';
+
+  // Compressed view
+  const compressedDiv = document.createElement('div');
+  compressedDiv.style.cssText = 'font-family:"SF Mono","Fira Code",monospace;font-size:13px;color:#10b981;line-height:1.6;white-space:pre-wrap;';
+  compressedDiv.textContent = output;
+
+  // Original view (hidden by default)
+  const originalDiv = document.createElement('div');
+  originalDiv.innerHTML = originalHTML;
+  originalDiv.style.display = 'none';
+
+  let showingOriginal = false;
+  toggleBtn.onclick = () => {
+    showingOriginal = !showingOriginal;
+    compressedDiv.style.display = showingOriginal ? 'none' : 'block';
+    originalDiv.style.display = showingOriginal ? 'block' : 'none';
+    toggleBtn.textContent = showingOriginal ? 'ver PITH' : 'ver original';
+  };
+
+  header.appendChild(badge);
+  header.appendChild(toggleBtn);
+  wrapper.appendChild(header);
+  wrapper.appendChild(compressedDiv);
+  wrapper.appendChild(originalDiv);
+
+  el.innerHTML = '';
+  el.appendChild(wrapper);
+
+  showBadge(`-${noiseRemoved}% output`, '#6366f1');
+}
+
+function scheduleResponseCompression(el: HTMLElement): void {
+  const existing = debounceTimers.get(el);
+  if (existing) clearTimeout(existing);
+
+  const timer = setTimeout(() => {
+    debounceTimers.delete(el);
+    compressAIResponse(el);
+  }, 1000); // 1s without mutations = streaming done
+
+  debounceTimers.set(el, timer);
+}
+
+const responseObserver = new MutationObserver((mutations) => {
+  if (!lensEnabled || !outputCompress) return;
+
+  for (const mutation of mutations) {
+    const target = mutation.target as Element;
+
+    // Never re-process our own injected elements
+    if ((target as HTMLElement).getAttribute?.('data-pith-output')) continue;
+    if (target.closest?.('[data-pith-output]')) continue;
+
+    // Nodes added to DOM (new message appearing)
+    for (const node of mutation.addedNodes) {
+      if (node.nodeType !== Node.ELEMENT_NODE) continue;
+      const el = node as Element;
+      if (el.getAttribute?.('data-pith-output')) continue;
+      const container = findResponseElement(el);
+      if (container && !processedResponses.has(container)) {
+        scheduleResponseCompression(container);
+      }
+    }
+
+    // Streaming mutations (text changing inside existing container)
+    if (mutation.type === 'characterData' || mutation.type === 'childList') {
+      const container = findResponseElement(target);
+      if (container && !processedResponses.has(container)) {
+        scheduleResponseCompression(container);
+      }
+    }
+  }
+});
+
+responseObserver.observe(document.body, {
+  childList: true,
+  subtree: true,
+  characterData: true,
+});
 
 // ═══════════════════════════════════════════════════
 // TEXT REPLACEMENT HELPERS

@@ -75,11 +75,12 @@ export default function App() {
   const [isDistilling, setIsDistilling] = useState(false);
   const [pithEnabled, setLensEnabled] = useState(true);
   const [responseBoost, setResponseBoost] = useState(true);
+  const [outputCompress, setOutputCompress] = useState(true);
   const [shareCopied, setShareCopied] = useState(false);
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get(['distilledTokens', 'pithEnabled', 'responseBoost', 'hasSeenOnboarding'], (result) => {
+      chrome.storage.local.get(['distilledTokens', 'pithEnabled', 'responseBoost', 'outputCompress', 'hasSeenOnboarding'], (result) => {
         const tokens = result.distilledTokens || 0;
         setSavings({
           distilledTokens: tokens,
@@ -87,6 +88,7 @@ export default function App() {
         });
         setLensEnabled(result.pithEnabled !== false);
         setResponseBoost(result.responseBoost !== false);
+        setOutputCompress(result.outputCompress !== false);
         setHasSeenOnboarding(result.hasSeenOnboarding === true);
       });
     } else {
@@ -250,6 +252,21 @@ export default function App() {
             className={`w-10 h-5 rounded-full transition-colors relative ${responseBoost ? 'bg-emerald-500' : 'bg-slate-600'}`}
           >
             <span className={`block w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${responseBoost ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-slate-300">Output Compress (comprimir respostas)</span>
+          <button
+            onClick={() => {
+              const next = !outputCompress;
+              setOutputCompress(next);
+              if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+                chrome.storage.local.set({ outputCompress: next });
+              }
+            }}
+            className={`w-10 h-5 rounded-full transition-colors relative ${outputCompress ? 'bg-indigo-500' : 'bg-slate-600'}`}
+          >
+            <span className={`block w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${outputCompress ? 'translate-x-5' : 'translate-x-0.5'}`} />
           </button>
         </div>
       </div>
