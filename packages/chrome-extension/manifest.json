@@ -10,6 +10,10 @@
   "host_permissions": [
     "https://pith.onrender.com/*"
   ],
+  "background": {
+    "service_worker": "src/background.ts",
+    "type": "module"
+  },
   "action": {
     "default_popup": "index.html",
     "default_title": "PITH Dashboard"
