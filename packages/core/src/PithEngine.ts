@@ -200,9 +200,9 @@ export class PithEngine {
   // ≥2 question marks, OR question + personal pronoun + multiple sentences
   private isConversational(text: string): boolean {
     const qCount = (text.match(/\?/g) || []).length;
-    const hasPersonal = /\b(eu|tu|você|vocês|nós|I|we|you)\b/i.test(text);
-    const sCount = text.split(/[.!?]+/).filter(s => s.trim().length > 2).length;
-    return qCount >= 2 || (qCount >= 1 && hasPersonal && sCount >= 2);
+    // \b fails with accented chars (ê, ã etc.) — use lookahead/lookbehind with non-letter boundary
+    const hasPersonal = /(?:^|[^a-zA-ZÀ-ÿ])(eu|tu|você|vocês|nós|I|we|you)(?:[^a-zA-ZÀ-ÿ]|$)/i.test(text);
+    return qCount >= 2 || (qCount >= 1 && hasPersonal);
   }
 
   // ═══════════════════════════════════════════════════
@@ -357,6 +357,13 @@ export class PithEngine {
         continue;
       }
 
+      // Contracted negation: "haven't"→"havent", "doesn't"→"doesnt", "won't"→"wont" etc.
+      // Pattern: original word ends in n't or 't (apostrophe-t) → negation auxiliary, skip
+      if (/n't$/i.test(words[i]) || /[a-z]'t$/i.test(words[i])) {
+        negateNext = !negateNext;
+        continue;
+      }
+
       // Number + unit fusion: "5 dias" → "5d"
       if (/^\d+$/.test(clean) && i + 1 < words.length) {
         const nextClean = words[i + 1].replace(/[^a-zA-ZÀ-ÿ-]/g, '').toLowerCase();
@@ -405,12 +412,14 @@ export class PithEngine {
     const seen = new Set<string>();
 
     // Action = best-scoring infinitive verb(s) among survivors (generic: VERB_INFINITIVE pattern)
+    // Require ≥6 chars to avoid catching EN prepositions: "under"(5), "after"(5), "over"(4)
     // Compound: top 2 infinitives → ![verb1|verb2]; single → !verb; fallback → first survivor
     const infinitives = fused
       .filter(item =>
         !item.word.startsWith('~') &&
         !/\d/.test(item.word) &&
         !/^[A-Z]/.test(item.word) &&
+        item.word.length >= 6 &&
         !PithEngine.ADJECTIVE_SUFFIX.test(item.word.toLowerCase()) &&
         PithEngine.VERB_INFINITIVE.test(item.word.toLowerCase())
       )
@@ -433,6 +442,18 @@ export class PithEngine {
     if (!tag) {
       for (const [key, val] of PithEngine.INTENT_TAGS.entries()) {
         if (lower.includes(key)) { tag = `[${val}]`; break; }
+      }
+    }
+
+    // If no action from survivor infinitives, rescue from INTENT_TAGS:
+    // short verb triggers (e.g. "criar"=5, "fix"=3) score below threshold but carry action intent
+    if (!action) {
+      for (const [key] of PithEngine.INTENT_TAGS.entries()) {
+        if (lower.includes(key) && PithEngine.VERB_INFINITIVE.test(key)) {
+          action = '!' + key;
+          actionKeys.add(key);
+          break;
+        }
       }
     }
 
@@ -508,7 +529,7 @@ export class PithEngine {
     let stance = '';
     if (negCount > 0 && qCount > 0) stance = '[~?]';
     else if (negCount > 0) stance = '[~]';
-    else if (qCount >= 2) stance = '[?]';
+    else if (qCount >= 1) stance = '[?]';
 
     const cleaned = this.humanNoiseLayer(text);
     const originalWordCount = cleaned.split(/\s+/).length;
@@ -529,9 +550,12 @@ export class PithEngine {
     const survivors: { word: string; score: number; origIdx: number }[] = [];
     const seenLower = new Set<string>();
 
+    const convNegRegex = /^(não|nao|not|never|sem|without|nem)$/i;
     for (let i = 0; i < words.length; i++) {
       const clean = words[i].replace(/[^a-zA-ZÀ-ÿ0-9-]/g, '');
       if (!clean) continue;
+      // Skip negation words and contracted negation (n't / 't) — stance is already captured globally
+      if (convNegRegex.test(clean) || /n't$/i.test(words[i]) || /[a-z]'t$/i.test(words[i])) continue;
       const key = clean.toLowerCase();
       if (seenLower.has(key)) continue;
       seenLower.add(key);
@@ -550,11 +574,12 @@ export class PithEngine {
 
     const fused = this.fuseProperNouns(survivors);
 
-    // Compound action: top 2 infinitives (same logic as queryPipeline)
+    // Compound action: top 2 infinitives (same logic as queryPipeline, ≥6 chars)
     const infinitives = fused
       .filter(item =>
         !/\d/.test(item.word) &&
         !/^[A-Z]/.test(item.word) &&
+        item.word.length >= 6 &&
         !PithEngine.ADJECTIVE_SUFFIX.test(item.word.toLowerCase()) &&
         PithEngine.VERB_INFINITIVE.test(item.word.toLowerCase())
       )
