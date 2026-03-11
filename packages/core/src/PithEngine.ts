@@ -298,13 +298,6 @@ export class PithEngine {
     const originalWordCount = cleaned.split(/\s+/).length;
     let workText = cleaned.replace(/[?!.…]+$/g, '').trim();
 
-    // Detect intent tag
-    const lower = workText.toLowerCase();
-    let tag = '';
-    for (const [key, val] of PithEngine.INTENT_TAGS.entries()) {
-      if (lower.includes(key)) { tag = `[${val}]`; break; }
-    }
-
     // Normalize: insert space around punctuation used as word separators (no space after comma, slash between words)
     workText = workText.replace(/([a-zA-ZÀ-ÿ0-9])([,;])([a-zA-ZÀ-ÿ0-9])/g, '$1 $3');
     workText = workText.replace(/([a-zA-ZÀ-ÿ0-9])\/([a-zA-ZÀ-ÿ0-9])/g, '$1 $2');
@@ -327,6 +320,7 @@ export class PithEngine {
       'anos': 'y', 'ano': 'y', 'years': 'y', 'year': 'y',
       'horas': 'h', 'hora': 'h', 'hours': 'h', 'hour': 'h',
       'minutos': 'min', 'minutes': 'min',
+      'semanas': 'w', 'semana': 'w', 'weeks': 'w', 'week': 'w',
     };
     const skipIndices = new Set<number>();
     const negationRegex = /^(não|nao|not|never|sem|without|nem)$/i;
@@ -350,7 +344,7 @@ export class PithEngine {
       if (/^\d+$/.test(clean) && i + 1 < words.length) {
         const nextClean = words[i + 1].replace(/[^a-zA-ZÀ-ÿ-]/g, '').toLowerCase();
         if (unitMap[nextClean]) {
-          const finalWord = negateNext ? '-' + clean + unitMap[nextClean] : clean + unitMap[nextClean];
+          const finalWord = negateNext ? '~' + clean + unitMap[nextClean] : clean + unitMap[nextClean];
           survivors.push({ word: finalWord, score: 100, origIdx: i });
           negateNext = false;
           skipIndices.add(i + 1);
@@ -360,9 +354,9 @@ export class PithEngine {
 
       const isSentenceStart = sentenceStarts.has(i);
       const score = this.scoreWord(words[i], freq, totalWords, i === 0, isSentenceStart, isQuestion);
-      
+
       if (score >= PithEngine.QUERY_THRESHOLD) {
-        survivors.push({ word: negateNext ? '-' + clean : clean, score, origIdx: i });
+        survivors.push({ word: negateNext ? '~' + clean : clean, score, origIdx: i });
         negateNext = false;
       }
     }
@@ -385,11 +379,42 @@ export class PithEngine {
     const fused = this.fuseProperNouns(survivors);
 
     // Classify into symbolic tokens by PATTERN (no word lists)
-    let action = '';
     const niches: { word: string; score: number }[] = [];
     const entities: string[] = [];
     const attrs: string[] = [];
     const seen = new Set<string>();
+
+    // Action = best-scoring infinitive verb(s) among survivors (generic: VERB_INFINITIVE pattern)
+    // Compound: top 2 infinitives → ![verb1|verb2]; single → !verb; fallback → first survivor
+    const infinitives = fused
+      .filter(item =>
+        !item.word.startsWith('~') &&
+        !/\d/.test(item.word) &&
+        !/^[A-Z]/.test(item.word) &&
+        !PithEngine.ADJECTIVE_SUFFIX.test(item.word.toLowerCase()) &&
+        PithEngine.VERB_INFINITIVE.test(item.word.toLowerCase())
+      )
+      .sort((a, b) => b.score - a.score);
+    const actionWords = infinitives.slice(0, 2).map(i => i.word);
+    const actionKeys = new Set(actionWords.map(w => w.toLowerCase()));
+    let action = actionWords.length === 2
+      ? `![${actionWords[0]}|${actionWords[1]}]`
+      : actionWords.length === 1
+        ? '!' + actionWords[0]
+        : '';
+
+    // Detect intent tag — action word first (semantic), fallback to full-text scan
+    const lower = workText.toLowerCase();
+    let tag = '';
+    for (const aw of actionWords) {
+      const t = PithEngine.INTENT_TAGS.get(aw.toLowerCase());
+      if (t) { tag = `[${t}]`; break; }
+    }
+    if (!tag) {
+      for (const [key, val] of PithEngine.INTENT_TAGS.entries()) {
+        if (lower.includes(key)) { tag = `[${val}]`; break; }
+      }
+    }
 
     for (const item of fused) {
       const key = item.word.toLowerCase();
@@ -414,7 +439,10 @@ export class PithEngine {
         continue;
       }
 
-      // First lowercase survivor → !action, rest → #niche (capped by score)
+      // Skip words already selected as action
+      if (actionKeys.has(key)) continue;
+
+      // First lowercase survivor → !action (fallback if no infinitive found), rest → #niche
       if (!action) {
         action = '!' + item.word;
       } else {
@@ -462,6 +490,23 @@ export class PithEngine {
     // Social closers
     r = r.replace(/\b(Hope this helps|Let me know if you|Feel free to ask)[^.!?\n]*/gi, '');
     r = r.replace(/\b(Please (don't hesitate|feel free) to)[^.!?\n]*/gi, '');
+
+    // PT intent/desire markers — pure framing, zero content
+    r = r.replace(/\b(quero|queria|gostaria( de)?|preciso( de)?|precisamos( de)?|queremos|desejo|desejamos)\s+/gi, '');
+
+    // PT connectives → symbols
+    r = r.replace(/\balém disso\b[,]?\s*/gi, '+ ');
+    r = r.replace(/\b(no entanto|porém|todavia|contudo|entretanto)\b[,]?\s*/gi, '| ');
+    r = r.replace(/\b(portanto|logo|por isso|dessa forma|assim sendo)\b[,]?\s*/gi, '→ ');
+    r = r.replace(/\b(mesmo que|ainda que|embora)\b\s*/gi, '~ ');
+    r = r.replace(/\b(para que|tudo para|a fim de que)\b\s*/gi, '');
+
+    // EN/ES/FR connectives → symbols
+    r = r.replace(/\b(however|nevertheless|yet|still)\b[,]?\s*/gi, '| ');
+    r = r.replace(/\b(therefore|thus|hence|consequently)\b[,]?\s*/gi, '→ ');
+    r = r.replace(/\b(moreover|furthermore|besides|additionally)\b[,]?\s*/gi, '+ ');
+    r = r.replace(/\b(although|even though|despite|regardless)\b\s*/gi, '~ ');
+    r = r.replace(/\b(so that|in order that)\b\s*/gi, '');
 
     // 1st-person narrative
     r = r.replace(/\bI('ll| will) (now |proceed to |go ahead and )/gi, '');
@@ -630,7 +675,7 @@ export class PithEngine {
           const w = words[i];
           const s = boosted[i];
           if (w.includes('\u0000')) {
-            kept.push(negateNext ? '-' + w : w);
+            kept.push(negateNext ? '~' + w : w);
             negateNext = false;
             continue;
           }
@@ -641,7 +686,7 @@ export class PithEngine {
             continue;
           }
           if (s !== null && s >= threshold) {
-            kept.push(negateNext ? '-' + w : w);
+            kept.push(negateNext ? '~' + w : w);
             negateNext = false;
           }
         }

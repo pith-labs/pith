@@ -52,7 +52,7 @@ function InteractiveDemo() {
               </span>
             </label>
             <div className="flex items-center gap-4">
-              {massaGorda > 0 && <span className="text-xs text-rose-400 font-mono font-bold">-{massaGorda}% Massa Gorda</span>}
+              {massaGorda > 0 && <span className="text-xs text-rose-400 font-mono font-bold">-{massaGorda}% Ruído</span>}
               {currentSavings > 0 && <span className="text-xs text-emerald-400 font-mono">↓ {currentSavings} tk salvos</span>}
             </div>
           </div>

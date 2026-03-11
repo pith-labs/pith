@@ -215,7 +215,7 @@ export default function DashboardPage() {
               <>
                 <div className="flex justify-between text-xs mb-1">
                   <span className="text-emerald-400 font-mono">PITH Output</span>
-                  <span className="text-rose-400 font-mono font-bold">-{massaGorda}% Massa Gorda</span>
+                  <span className="text-rose-400 font-mono font-bold">-{massaGorda}% Ruído</span>
                 </div>
                 <div className="relative">
                   <textarea

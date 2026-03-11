@@ -145,7 +145,7 @@ const marqueeSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1400" height=
 
   <!-- Output label -->
   <text x="784" y="292" font-family="sans-serif" font-size="11" font-weight="600" fill="#cbd5e1">PITH <tspan fill="#10b981" font-size="10">⚡ Destilando...</tspan></text>
-  <text x="1230" y="292" font-family="monospace" font-size="10" fill="#f43f5e" text-anchor="end">-38% Massa Gorda</text>
+  <text x="1230" y="292" font-family="monospace" font-size="10" fill="#f43f5e" text-anchor="end">-38% Ruído</text>
   <rect x="784" y="299" width="512" height="60" rx="8" fill="#020617" stroke="#064e3b" stroke-width="1"/>
   <text x="796" y="318" font-family="monospace" font-size="11" fill="#10b981">!explain ?jwt @auth</text>
   <text x="796" y="335" font-family="monospace" font-size="11" fill="#10b981">!implement :project</text>

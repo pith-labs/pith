@@ -140,7 +140,7 @@ function OnboardingScreen({ onFinish }: { onFinish: () => void }) {
             <div className="flex flex-col gap-1">
               <div className="flex justify-between items-center">
                 <label className="text-xs font-mono text-emerald-400 uppercase tracking-wider">PITH (destilado)</label>
-                <span className="text-xs font-mono text-rose-400 font-bold">-{noiseRemoved}% Massa Gorda</span>
+                <span className="text-xs font-mono text-rose-400 font-bold">-{noiseRemoved}% Ruído</span>
               </div>
               <div className="bg-black border border-emerald-900/50 rounded-xl p-3 text-sm text-emerald-400 font-mono leading-relaxed shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]">
                 {output}
@@ -359,7 +359,7 @@ export default function App() {
               </span>
             </label>
             <div className="flex items-center gap-3">
-              {massaGorda > 0 && <span className="text-xs text-rose-400 font-mono font-bold">-{massaGorda}% Massa Gorda</span>}
+              {massaGorda > 0 && <span className="text-xs text-rose-400 font-mono font-bold">-{massaGorda}% Ruído</span>}
               {currentSavings > 0 && <span className="text-xs text-emerald-400 font-mono">↓ {currentSavings} tk</span>}
             </div>
           </div>
