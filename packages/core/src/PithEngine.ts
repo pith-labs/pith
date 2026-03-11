@@ -297,12 +297,15 @@ export class PithEngine {
 
     if (!final.trim()) return { output: text, noiseRemoved: 0 };
 
-    const outputWordCount = final.split(/\s+/).length;
+    // Layer 6: Output Constraints (Economy)
+    const finalOutput = this.constraintLayer(final.trim(), text, []);
+
+    const outputWordCount = finalOutput.split(/\s+/).length;
     const noise = originalWordCount > 0
       ? Math.max(0, Math.floor(((originalWordCount - outputWordCount) / originalWordCount) * 100))
       : 0;
 
-    return { output: final.trim(), noiseRemoved: noise };
+    return { output: finalOutput, noiseRemoved: noise };
   }
 
   // ═══════════════════════════════════════════════════
@@ -505,8 +508,10 @@ export class PithEngine {
     for (const e of entities) parts.push(e);
     for (const a of attrs) parts.push(a);
 
-    const finalOutput = parts.join(' ').trim();
+    let finalOutput = parts.join(' ').trim();
     if (!finalOutput) return { output: text, noiseRemoved: 0 };
+
+    finalOutput = this.constraintLayer(finalOutput, text, parts);
 
     const outputWordCount = finalOutput.split(/\s+/).length;
     const noise = originalWordCount > 0
@@ -621,8 +626,10 @@ export class PithEngine {
     for (const e of entities) parts.push(e);
     for (const a of attrs.slice(0, 3)) parts.push(a);
 
-    const finalOutput = parts.join(' ').trim();
+    let finalOutput = parts.join(' ').trim();
     if (!finalOutput) return { output: text, noiseRemoved: 0 };
+
+    finalOutput = this.constraintLayer(finalOutput, text, parts);
 
     const outputWordCount = finalOutput.split(/\s+/).length;
     const noise = originalWordCount > 0
@@ -635,6 +642,32 @@ export class PithEngine {
   // ═══════════════════════════════════════════════════
   // SHARED LAYERS
   // ═══════════════════════════════════════════════════
+
+  private constraintLayer(finalText: string, originalText: string, parts: string[]): string {
+    const constraints: string[] = [];
+    const lowerOriginal = originalText.toLowerCase();
+
+    const hasTag = (tag: string) => parts.some(p => p === tag);
+
+    if (hasTag('[fx]') || hasTag('[gen]') || /```/.test(originalText) || /\b(código|code|script|função|function|refactor)\b/.test(lowerOriginal)) {
+        constraints.push('!NoExplanations');
+    }
+
+    if (/\b(liste|listar|list|lista)\b/.test(lowerOriginal)) {
+        constraints.push('!BulletsOnly');
+    }
+
+    const origWords = originalText.split(/\s+/).length;
+    if (origWords < 15 && constraints.length === 0) {
+        constraints.push('!DirectAnswer');
+    }
+
+    if (constraints.length > 0) {
+        return finalText + '\n\n' + constraints.join(' ');
+    }
+
+    return finalText;
+  }
 
   private humanNoiseLayer(text: string): string {
     let r = text;
