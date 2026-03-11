@@ -11,7 +11,22 @@
   ],
   "background": {
     "service_worker": "service-worker-loader.js",
-    "type": "module"
+    "type": "module",
+    "scripts": [
+      "service-worker-loader.js"
+    ]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "pith@pith.app",
+      "strict_min_version": "112.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ],
+        "optional": []
+      }
+    }
   },
   "icons": {
     "16": "icons/icon16.png",
