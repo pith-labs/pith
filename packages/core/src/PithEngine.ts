@@ -260,7 +260,8 @@ export class PithEngine {
 
     // 4. Verb penalty — only conjugated forms (auxiliary/filler): -3
     // Infinitives are content verbs → no penalty (they become !action in queryPipeline)
-    if (clean.length >= 6 && PithEngine.VERB_CONJUGATED.test(clean.toLowerCase())) score -= 3;
+    // Threshold ≥5 to also catch short conjugated filler: "vamos"(5), "sendo"(5), "demos"(5)
+    if (clean.length >= 5 && PithEngine.VERB_CONJUGATED.test(clean.toLowerCase())) score -= 3;
 
     // 5. Position bonus — first word in a line is often key context
     if (isFirstInLine && !isSentenceStart) score += 2;
