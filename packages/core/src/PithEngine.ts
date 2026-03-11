@@ -300,6 +300,10 @@ export class PithEngine {
       if (lower.includes(key)) { tag = `[${val}]`; break; }
     }
 
+    // Normalize: insert space around punctuation used as word separators (no space after comma, slash between words)
+    workText = workText.replace(/([a-zA-ZÀ-ÿ0-9])([,;])([a-zA-ZÀ-ÿ0-9])/g, '$1 $3');
+    workText = workText.replace(/([a-zA-ZÀ-ÿ0-9])\/([a-zA-ZÀ-ÿ0-9])/g, '$1 $2');
+
     // Score all words, keep survivors
     const freq = this.buildFreqMap(workText);
     const totalWords = workText.split(/\s+/).length;
@@ -476,6 +480,10 @@ export class PithEngine {
     r = r.replace(/\bin addition to\b/gi, '+');
     r = r.replace(/\bas a result( of)?\b/gi, '->');
 
+    // Articles — zero semantic value for LLM
+    r = r.replace(/\b(the|an)\s+/gi, '');
+    r = r.replace(/\bum(a|ns|as)?\s+/gi, ''); // PT: um/uma/uns/umas
+
     return r;
   }
 
@@ -511,6 +519,23 @@ export class PithEngine {
       ).join('|');
       return '[' + collapsed + ']';
     });
+
+    // Conjunctions → symbols
+    r = r.replace(/\band\b/gi, '+');
+    r = r.replace(/\bor\b/gi, '|');
+    r = r.replace(/\be\b/gi, '+');   // PT
+    r = r.replace(/\bou\b/gi, '|'); // PT/FR
+
+    // Temporal relations → symbols
+    r = r.replace(/\bbefore\b/gi, '<');
+    r = r.replace(/\bafter\b/gi, '>');
+    r = r.replace(/\bantes( de)?\b/gi, '<');
+    r = r.replace(/\bdepois( de)?\b/gi, '>');
+    r = r.replace(/\bapós\b/gi, '>');
+
+    // Copulas → =
+    r = r.replace(/\b(is|are|was|were)\b/gi, '=');
+    r = r.replace(/\b(é|são|está|estão|era|eram)\b/gi, '=');
 
     // Reference pattern: "just as we have for X and Y" → $X,$Y
     r = r.replace(/[Jj]ust as we have for\s+(\w+)\s+and\s+(\w+)/g, (_m, a, b) => `$${a},$${b}`);
@@ -555,7 +580,9 @@ export class PithEngine {
       const isQuestion = isQuestionLine(trimmed);
       const bulletMatch = trimmed.match(/^([-•–]\s+|\d+\.\s+)(.*)/);
       const marker = bulletMatch ? bulletMatch[1] : '';
-      const content = bulletMatch ? bulletMatch[2] : trimmed;
+      let content = bulletMatch ? bulletMatch[2] : trimmed;
+      // Normalize: punctuation used as word separators without spaces
+      content = content.replace(/([a-zA-ZÀ-ÿ0-9])([,;])([a-zA-ZÀ-ÿ0-9])/g, '$1 $3');
       const words = content.split(/\s+/);
 
       const lineStarts = new Set<number>([0]);
