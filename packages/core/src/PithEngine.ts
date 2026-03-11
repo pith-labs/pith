@@ -143,12 +143,14 @@ export class PithEngine {
   ]);
 
   // Scoring thresholds
-  private static readonly QUERY_THRESHOLD = 5;
+  private static readonly QUERY_THRESHOLD = 6;
   private static readonly COMPRESS_THRESHOLD = 4;
+  private static readonly MAX_QUERY_NICHES = 4;
 
   // Morphological patterns (algorithmic, not word lists)
   private static readonly ADJECTIVE_SUFFIX = /(?:ário|ária|oso|osa|ivo|iva|ável|ível|inho|inha|ante|ente|udo|uda|ário|ária|ary|ous|ive|able|ible|ful|less|ical|ial)$/i;
-  private static readonly VERB_ENDING = /(?:[aei]r|[aei]ndo|[aei]ram|[aei]va[ms]?|[aei]rá|[aei]rão|[aei]sse[ms]?)$/i;
+  private static readonly VERB_INFINITIVE = /[aei]r$/i;
+  private static readonly VERB_CONJUGATED = /(?:[aei]ndo|[aei]ram|[aei]va[ms]?|[aei]rá|[aei]rão|[aei]sse[ms]?|[aei]mos|[aei]reis)$/i;
 
   // ═══════════════════════════════════════════════════
   // PUBLIC API
@@ -238,8 +240,11 @@ export class PithEngine {
       if (ratio > 0.02) score -= Math.min(Math.floor(ratio * 60), 6);
     }
 
-    // 4. Verb penalty — detected by suffix morphology, not word lists
-    if (clean.length >= 6 && PithEngine.VERB_ENDING.test(clean.toLowerCase())) score -= 3;
+    // 4. Verb penalty — infinitives -2 (content verbs), conjugated -3 (auxiliary/filler)
+    if (clean.length >= 6) {
+      if (PithEngine.VERB_INFINITIVE.test(clean.toLowerCase())) score -= 2;
+      else if (PithEngine.VERB_CONJUGATED.test(clean.toLowerCase())) score -= 3;
+    }
 
     // 5. Position bonus — first word in a line is often key context
     if (isFirstInLine && !isSentenceStart) score += 2;
@@ -334,9 +339,8 @@ export class PithEngine {
       const clean = words[i].replace(/[^a-zA-ZÀ-ÿ0-9-]/g, '');
       if (!clean) continue;
 
-      // Intent trigger words are consumed by the tag
-      if (PithEngine.INTENT_TAGS.has(clean.toLowerCase())) continue;
-
+      // Intent trigger words: short ones score below threshold naturally;
+      // long content verbs (e.g. "melhorar", "corrigir") survive and become !action
       if (negationRegex.test(clean)) {
         negateNext = !negateNext;
         continue;
@@ -382,7 +386,7 @@ export class PithEngine {
 
     // Classify into symbolic tokens by PATTERN (no word lists)
     let action = '';
-    const niches: string[] = [];
+    const niches: { word: string; score: number }[] = [];
     const entities: string[] = [];
     const attrs: string[] = [];
     const seen = new Set<string>();
@@ -410,19 +414,25 @@ export class PithEngine {
         continue;
       }
 
-      // First lowercase survivor → !action, rest → #niche
+      // First lowercase survivor → !action, rest → #niche (capped by score)
       if (!action) {
         action = '!' + item.word;
       } else {
-        niches.push('#' + item.word);
+        niches.push({ word: '#' + item.word, score: item.score });
       }
     }
+
+    // Cap niches: keep top MAX_QUERY_NICHES by score — most semantically dense wins
+    const topNiches = niches
+      .sort((a, b) => b.score - a.score)
+      .slice(0, PithEngine.MAX_QUERY_NICHES)
+      .map(n => n.word);
 
     // Assemble: [tag] !action #niche @entity ?attr
     const parts: string[] = [];
     if (tag) parts.push(tag);
     if (action) parts.push(action);
-    for (const n of niches) parts.push(n);
+    for (const n of topNiches) parts.push(n);
     for (const e of entities) parts.push(e);
     for (const a of attrs) parts.push(a);
 
