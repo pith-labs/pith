@@ -2,6 +2,7 @@
   "name": "pith-monorepo",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ]
 }
