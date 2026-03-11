@@ -118,6 +118,7 @@ function Endpoint({ method, path, summary, auth = true, pro = false, body, respo
 export default function DocsPage() {
   const { t } = useTranslation();
   const { session } = useAuth();
+  const [activeTab, setActiveTab] = useState<'nodejs' | 'python' | 'csharp' | 'java'>('nodejs');
 
   const endpoints: EndpointProps[] = [
     {
@@ -334,26 +335,120 @@ export default function DocsPage() {
 
       {/* Quick start */}
       <div className="bg-slate-900 border border-emerald-500/20 rounded-2xl p-6">
-        <h2 className="font-bold text-white mb-4 flex items-center gap-2">
-          <Zap size={16} className="text-emerald-400" />
-          {t('docs.quick_start.title')}
-        </h2>
-        <CodeBlock lang="js" code={`const res = await fetch('${BASE_URL}/v1/optimize', {
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <h2 className="font-bold text-white flex items-center gap-2">
+            <Zap size={16} className="text-emerald-400" />
+            {t('docs.quick_start.title')}
+          </h2>
+          <div className="flex bg-slate-800/50 p-1 rounded-xl border border-slate-700/50 self-start">
+            {(['nodejs', 'python', 'csharp', 'java'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === tab 
+                    ? 'bg-emerald-500 text-slate-900 shadow-lg' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {t(`docs.quick_start.tabs.${tab}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {activeTab === 'nodejs' && (
+          <CodeBlock lang="js" code={`const res = await fetch('${BASE_URL}/v1/optimize', {
   method: 'POST',
-  headers: {
-    'Authorization': 'Bearer SEU_TOKEN',
+  headers: { 
     'Content-Type': 'application/json',
+    'Authorization': 'pith_live_xxxxxxxx' 
   },
-  body: JSON.stringify({ text: userPrompt }),
+  body: JSON.stringify({ text: userPrompt })
 });
 
 const { output, tokensSaved, noiseRemoved } = await res.json();
 
-// ${t('docs.quick_start.instruction').replace('// ', '')}
+${t('docs.quick_start.node_comment')}
 const completion = await openai.chat.completions.create({
   model: 'gpt-4o',
   messages: [{ role: 'user', content: output }],
 });`} />
+        )}
+
+        {activeTab === 'python' && (
+          <CodeBlock lang="python" code={`import requests
+import openai
+
+res = requests.post(
+    "${BASE_URL}/v1/optimize",
+    headers={"Authorization": "pith_live_xxxxxxxx"},
+    json={"text": user_prompt}
+)
+
+data = res.json()
+output = data["output"]
+
+${t('docs.quick_start.python_comment')}
+completion = openai.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": output}]
+)`} />
+        )}
+
+        {activeTab === 'csharp' && (
+          <CodeBlock lang="csharp" code={`using System.Net.Http.Json;
+
+var client = new HttpClient();
+client.DefaultRequestHeaders.Add("Authorization", "pith_live_xxxxxxxx");
+
+var res = await client.PostAsJsonAsync("${BASE_URL}/v1/optimize", new { 
+    text = userPrompt 
+});
+
+var data = await res.Content.ReadFromJsonAsync<dynamic>();
+string output = data.output;
+
+${t('docs.quick_start.csharp_comment')}
+var completion = await openAiClient.GetChatCompletionsAsync("gpt-4o", new ChatCompletionsOptions() {
+    Messages = { new ChatRequestUserMessage(output) }
+});`} />
+        )}
+
+        {activeTab === 'java' && (
+          <CodeBlock lang="java" code={`import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.List;
+import org.json.JSONObject; // Assuming you have a JSON library like org.json
+
+// Assuming you have an OpenAI client setup, e.g., from OpenAI-Java library
+// OpenAiService openAiService = new OpenAiService("YOUR_OPENAI_API_KEY");
+
+HttpRequest request = HttpRequest.newBuilder()
+    .uri(URI.create("${BASE_URL}/v1/optimize"))
+    .header("Authorization", "pith_live_xxxxxxxx")
+    .header("Content-Type", "application/json")
+    .POST(HttpRequest.BodyPublishers.ofString("{\\"text\\":\\"" + userPrompt + "\\"\\"}"))
+    .build();
+
+HttpResponse<String> response = HttpClient.newHttpClient()
+    .send(request, HttpResponse.BodyHandlers.ofString());
+
+JSONObject data = new JSONObject(response.body());
+String output = data.getString("output");
+
+${t('docs.quick_start.java_comment')}
+// Example using OpenAI-Java library
+// ChatCompletion completion = openAiService.createChatCompletion(
+//     ChatCompletionRequest.builder()
+//         .model("gpt-4o")
+//         .messages(List.of(new ChatMessage("user", output)))
+//         .build()
+// );`} />
+        )}
+
         <p className="text-xs text-slate-500 mt-4">
           {t('docs.quick_start.savings')}
         </p>

@@ -178,8 +178,17 @@
       "e500": "Error interno del servidor."
     },
     "quick_start": {
-      "title": "Quick Start — Node.js",
-      "instruction": "// Usa output en lugar de userPrompt al llamar a OpenAI",
+      "title": "Quick Start — Implementación",
+      "tabs": {
+        "nodejs": "Node.js",
+        "python": "Python",
+        "csharp": "C#",
+        "java": "Java"
+      },
+      "node_comment": "// Usa output en lugar de userPrompt al llamar a OpenAI",
+      "python_comment": "# Usa 'output' en lugar de 'user_prompt' en tu llamada de LLM",
+      "csharp_comment": "// Usa 'output' en lugar de 'userPrompt' en tu chamada de LLM",
+      "java_comment": "// Usa 'output' en lugar de 'userPrompt' en tu chamada de LLM",
       "savings": "Cada llamada a PITH ahorra en promedio entre un 40% y 60% de los tokens enviados a OpenAI."
     }
   },
