@@ -253,10 +253,11 @@ export class PithEngine {
   // ═══════════════════════════════════════════════════
 
   private compressPipeline(text: string): { output: string; noiseRemoved: number } {
-    const originalWordCount = text.split(/\s+/).length;
+    const cleaned = this.humanNoiseLayer(text);
+    const originalWordCount = cleaned.split(/\s+/).length;
 
     // Layer 1: Preserve untouchable tokens (code, URLs, brackets, key:value)
-    const { text: preserved, map: preserveMap } = this.preserveLayer(text);
+    const { text: preserved, map: preserveMap } = this.preserveLayer(cleaned);
 
     // Layer 2: Pattern transforms (slash-groups → [A|B|C])
     const patterned = this.patternLayer(preserved);
@@ -288,8 +289,9 @@ export class PithEngine {
   // ═══════════════════════════════════════════════════
 
   private queryPipeline(text: string): { output: string; noiseRemoved: number } {
-    const originalWordCount = text.split(/\s+/).length;
-    let workText = text.replace(/[?!.…]+$/g, '').trim();
+    const cleaned = this.humanNoiseLayer(text);
+    const originalWordCount = cleaned.split(/\s+/).length;
+    let workText = cleaned.replace(/[?!.…]+$/g, '').trim();
 
     // Detect intent tag
     const lower = workText.toLowerCase();
@@ -435,6 +437,48 @@ export class PithEngine {
   // SHARED LAYERS
   // ═══════════════════════════════════════════════════
 
+  private humanNoiseLayer(text: string): string {
+    let r = text;
+
+    // Social openers
+    r = r.replace(/^(Hi|Hello|Hey|Greetings)[,!]?\s+/gim, '');
+    r = r.replace(/^(Of course|Sure|Certainly|Absolutely|Gladly)[,!.]?\s*/gim, '');
+    r = r.replace(/^(I'm happy to|I'd be happy to|Happy to)[^.!?\n]*/gim, '');
+
+    // Social closers
+    r = r.replace(/\b(Hope this helps|Let me know if you|Feel free to ask)[^.!?\n]*/gi, '');
+    r = r.replace(/\b(Please (don't hesitate|feel free) to)[^.!?\n]*/gi, '');
+
+    // 1st-person narrative
+    r = r.replace(/\bI('ll| will) (now |proceed to |go ahead and )/gi, '');
+    r = r.replace(/\bLet me (now |just )?/gi, '');
+    r = r.replace(/\bI'm going to /gi, '');
+    r = r.replace(/\bI (can |will )?just /gi, '');
+
+    // Hedging
+    r = r.replace(/\b(I think|I believe|I feel|In my opinion|It seems|It appears)[,]?\s*/gi, '');
+    r = r.replace(/\b(perhaps|maybe|sort of|kind of|arguably)\s+/gi, '');
+
+    // Emotional framing
+    r = r.replace(/\b(Unfortunately|Fortunately|Sadly|Luckily|Great news)[,!]?\s*/gi, '');
+    r = r.replace(/\bI('m| am) (excited|pleased|glad|sorry) to (say|report|share|announce)[^,.\n]*(,\s*)?/gi, '');
+
+    // Filler adverbs
+    r = r.replace(/\b(really|just|literally|basically|essentially|actually|simply|obviously|clearly)\s+/gi, '');
+
+    // Redundant constructions
+    r = r.replace(/\bin order to\b/gi, 'to');
+    r = r.replace(/\bdue to the fact that\b/gi, 'because');
+    r = r.replace(/\bit is (important|worth|necessary) to note that\b/gi, '');
+    r = r.replace(/\bas (you may|you might|we all) know[,]?\s*/gi, '');
+    r = r.replace(/\b(as mentioned|as noted|as stated) (above|before|earlier|previously)[,]?\s*/gi, '');
+    r = r.replace(/\bin (the context of|terms of|the case of)\b/gi, 'for');
+    r = r.replace(/\bin addition to\b/gi, '+');
+    r = r.replace(/\bas a result( of)?\b/gi, '->');
+
+    return r;
+  }
+
   // Preserve untouchable tokens with placeholders
   private preserveLayer(text: string): { text: string; map: Map<string, string> } {
     const map = new Map<string, string>();
@@ -444,6 +488,7 @@ export class PithEngine {
     let r = text;
     r = r.replace(/```[\s\S]*?```/g, m => ph(m));           // code blocks
     r = r.replace(/https?:\/\/\S+/g, m => ph(m));           // URLs
+    r = r.replace(/\b[\w.-]+(?:\/[\w.-]+)+\.[\w]+\b/g, m => ph(m)); // file paths
     r = r.replace(/\[[^\]]+\]/g, m => ph(m));                // bracketed groups
     r = r.replace(/\b\w+:\s?(?:True|False|true|false)\b/g, m => ph(m)); // key:bool
     r = r.replace(/\{\{.*?\}\}/g, m => ph(m));               // template vars
@@ -456,9 +501,11 @@ export class PithEngine {
   private patternLayer(text: string): string {
     let r = text;
 
-    // Slash-groups: VIP/Premiere/Stage → [VIP|Pre|Sta]
+    // Slash-groups: only compress when at least one part is long (>6 chars)
+    // Short pairs like "gateway/client", "PT/EN", "read/write" are preserved as-is
     r = r.replace(/\b(\w{2,}(?:\/\w{2,}){1,})\b/g, (_m, group: string) => {
       const parts = group.split('/');
+      if (parts.every((p: string) => p.length <= 6)) return group;
       const collapsed = parts.map((p: string) =>
         p.length > 4 ? p[0].toUpperCase() + p.slice(1, 3).toLowerCase() : p
       ).join('|');
@@ -511,36 +558,54 @@ export class PithEngine {
       const content = bulletMatch ? bulletMatch[2] : trimmed;
       const words = content.split(/\s+/);
 
+      const lineStarts = new Set<number>([0]);
+      for (let i = 0; i < words.length; i++) {
+        if (/[.!?]$/.test(words[i]) && i + 1 < words.length) lineStarts.add(i + 1);
+      }
+
       // We run the filter logic in a closure so we can retry with a lower threshold if needed
       const tryFilter = (threshold: number) => {
+        // Pass 1: pre-score all words (null = negation word, Infinity = placeholder)
+        const rawScores: (number | null)[] = words.map((w, i) => {
+          if (w.includes('\u0000')) return Infinity;
+          const wClean = w.replace(/[^a-zA-ZÀ-ÿ0-9-]/g, '');
+          if (!wClean) return null;
+          if (negationRegex.test(wClean)) return null;
+          const isSentStart = lineStarts.has(i);
+          return this.scoreWord(w, freq, totalWords, i === 0 && !marker, isSentStart, isQuestion);
+        });
+
+        // Pass 2: adjacency boost — word below threshold adjacent to strong neighbor gets pulled up
+        // This preserves compound technical tokens (e.g. "API key", "rate limit") without hardcoding
+        const boosted: (number | null)[] = rawScores.map((s, i) => {
+          if (s === null || s === Infinity || s >= threshold) return s;
+          const prev = rawScores[i - 1] ?? null;
+          const next = rawScores[i + 1] ?? null;
+          const neighborMax = Math.max(prev ?? -Infinity, next ?? -Infinity);
+          if (neighborMax >= threshold + 2) return s + 3;
+          return s;
+        });
+
+        // Pass 3: consume with negation state
         const kept: string[] = [];
         let negateNext = false;
-
-        const lineStarts = new Set<number>([0]);
-        for (let i = 0; i < words.length; i++) {
-          if (/[.!?]$/.test(words[i]) && i + 1 < words.length) lineStarts.add(i + 1);
-        }
-
         for (let i = 0; i < words.length; i++) {
           const w = words[i];
+          const s = boosted[i];
           if (w.includes('\u0000')) {
             kept.push(negateNext ? '-' + w : w);
             negateNext = false;
-            continue; 
-          } // placeholders
-
-          const wClean = w.replace(/[^a-zA-ZÀ-ÿ0-9-]/g, '');
-          if (wClean && negationRegex.test(wClean)) {
-            negateNext = !negateNext; // toggle to handle double negatives natively, or just set to true
-            continue; // Skip the negation word itself
+            continue;
           }
-
-          const isSentStart = lineStarts.has(i);
-          const score = this.scoreWord(w, freq, totalWords, i === 0 && !marker, isSentStart, isQuestion);
-          
-          if (score >= threshold) {
+          const wClean = w.replace(/[^a-zA-ZÀ-ÿ0-9-]/g, '');
+          if (!wClean) continue;
+          if (negationRegex.test(wClean)) {
+            negateNext = !negateNext;
+            continue;
+          }
+          if (s !== null && s >= threshold) {
             kept.push(negateNext ? '-' + w : w);
-            negateNext = false; // reset after binding
+            negateNext = false;
           }
         }
         return kept;

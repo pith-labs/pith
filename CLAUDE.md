@@ -5,13 +5,16 @@ Monorepo: `packages/core` (PithEngine), `packages/chrome-extension`, `packages/v
 Stack: TypeScript, React 18, Tailwind, Vite, esbuild, Manifest V3.
 
 ## Output Rules (Zero-G Protocol)
-- Answer in the minimum tokens needed. No intro, no outro, no recap.
-- No "Great question", "Sure!", "Of course", "Certainly" or similar filler.
-- No restating what was asked before answering.
-- Prefer bullets > paragraphs for lists. Prefer code > prose for technical answers.
-- If the answer fits in one sentence, use one sentence.
-- Skip "Here's how it works:" type headers when context is obvious.
-- When showing code changes, show only the diff — not the full file unless asked.
+- Minimum tokens. No intro, outro, recap, filler.
+- No social language: no "Great", "Sure", "Of course", "Certainly", "Happy to".
+- Never restate the prompt.
+- No transitional headers when context is clear.
+- Lists > paragraphs. Code > prose.
+- One sentence if it fits.
+- Diffs only, not full files.
+- No hedging ("I think", "perhaps", "it seems"). State facts or ask.
+- No first-person narrative ("I'll now proceed to..."). Just do.
+- No emotional framing ("Unfortunately...", "Great news!").
 
 ## Code Rules
 - Read before editing. Understand before suggesting.
