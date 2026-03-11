@@ -171,7 +171,7 @@ export default function App() {
   const [savings, setSavings] = useState({ distilledTokens: 0, dollars: 0 });
   const [massaGorda, setMassaGorda] = useState(0);
   const [isDistilling, setIsDistilling] = useState(false);
-  const [pithEnabled, setLensEnabled] = useState(true);
+  const [pithEnabled, setPithEnabled] = useState(true);
   const [responseBoost, setResponseBoost] = useState(true);
   const [outputCompress, setOutputCompress] = useState(true);
   const [shareCopied, setShareCopied] = useState(false);
@@ -186,7 +186,7 @@ export default function App() {
       chrome.storage.local.get(['distilledTokens', 'pithEnabled', 'responseBoost', 'outputCompress', 'hasSeenOnboarding'], (result) => {
         const tokens = result.distilledTokens || 0;
         setSavings({ distilledTokens: tokens, dollars: (tokens / 1_000_000) * 15 });
-        setLensEnabled(result.pithEnabled !== false);
+        setPithEnabled(result.pithEnabled !== false);
         setResponseBoost(result.responseBoost !== false);
         setOutputCompress(result.outputCompress !== false);
         setHasSeenOnboarding(result.hasSeenOnboarding === true);
@@ -345,7 +345,7 @@ export default function App() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             className="w-full h-32 bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm focus:outline-none focus:border-indigo-500 resize-none font-mono text-slate-300"
-            placeholder="Ex: BFF [Purchase/Tickets] Display VIP/Premiere/Stage product categories according to showtimes. Just as we have for PY and CL..."
+            placeholder="Ex: Olá, tudo bem? Queria pedir sua ajuda — você consegue me explicar como implementar autenticação JWT no meu projeto? Seria muito importante para mim, obrigado!"
           />
         </div>
 
@@ -376,7 +376,7 @@ export default function App() {
         <div className="flex items-center justify-between">
           <span className="text-sm text-slate-300">Modo Invisível (Auto-compress)</span>
           <button
-            onClick={() => { const n = !pithEnabled; setLensEnabled(n); if (typeof chrome !== 'undefined' && chrome.storage?.local) chrome.storage.local.set({ pithEnabled: n }); }}
+            onClick={() => { const n = !pithEnabled; setPithEnabled(n); if (typeof chrome !== 'undefined' && chrome.storage?.local) chrome.storage.local.set({ pithEnabled: n }); }}
             className={`w-10 h-5 rounded-full transition-colors relative ${pithEnabled ? 'bg-emerald-500' : 'bg-slate-600'}`}
           >
             <span className={`block w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${pithEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />

@@ -14,9 +14,19 @@
     "service_worker": "src/background.ts",
     "type": "module"
   },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
     "default_popup": "index.html",
-    "default_title": "PITH Dashboard"
+    "default_title": "PITH",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
   "content_scripts": [
     {
