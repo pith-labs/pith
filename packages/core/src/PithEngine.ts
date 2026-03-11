@@ -148,7 +148,11 @@ export class PithEngine {
   private static readonly MAX_QUERY_NICHES = 4;
 
   // Morphological patterns (algorithmic, not word lists)
-  private static readonly ADJECTIVE_SUFFIX = /(?:ário|ária|oso|osa|ivo|iva|ável|ível|inho|inha|ante|ente|udo|uda|ário|ária|ary|ous|ive|able|ible|ful|less|ical|ial)$/i;
+  // Adjective/determiner suffixes — Latin-derived morphological patterns, never verb roots
+  // -ular/-olar/-lear: celular, solar, nuclear, linear, popular, molecular, circular
+  // -quer/-quier: qualquer, quaisquer (PT), cualquier (ES) — grammaticalized determiners
+  // -ico/-ica: genérico, histórico, dinâmico, automático, específico, público, único, lógico
+  private static readonly ADJECTIVE_SUFFIX = /(?:ário|ária|oso|osa|ivo|iva|ável|ível|inho|inha|ante|ente|udo|uda|ário|ária|ary|ous|ive|able|ible|ful|less|ical|ial|ular|olar|lear|quer|quier|ico|ica)$/i;
   private static readonly VERB_INFINITIVE = /[aei]r$/i;
   private static readonly VERB_CONJUGATED = /(?:[aei]ndo|[aei]ram|[aei]va[ms]?|[aei]rá|[aei]rão|[aei]sse[ms]?|[aei]mos|[aei]reis)$/i;
 
@@ -160,9 +164,13 @@ export class PithEngine {
     try {
       if (!text.trim()) return { output: '[PITH: No meaningful data found]', noiseRemoved: 0, isQuery: false };
 
-      const query = this.isQuery(text);
-      const result = query ? this.queryPipeline(text) : this.compressPipeline(text);
-      return { ...result, isQuery: query };
+      const mode = this.detectMode(text);
+      const result = mode === 'compress'
+        ? this.compressPipeline(text)
+        : mode === 'conversational'
+          ? this.conversationalPipeline(text)
+          : this.queryPipeline(text);
+      return { ...result, isQuery: mode !== 'compress' };
 
     } catch (error) {
       console.error('Pith Engine Error:', error);
@@ -175,16 +183,26 @@ export class PithEngine {
   }
 
   // ═══════════════════════════════════════════════════
-  // MODE DETECTION
+  // MODE DETECTION (compress | query | conversational)
   // ═══════════════════════════════════════════════════
 
-  private isQuery(text: string): boolean {
-    if (text.split(/\s+/).length > 40) return false;
-    if (text.split('\n').filter(l => l.trim()).length > 3) return false;
-    if (/```/.test(text)) return false;
-    if (/^\s*\d+\.\s/m.test(text)) return false;
-    if (/^\s*[-•–]\s/m.test(text)) return false;
-    return true;
+  private detectMode(text: string): 'compress' | 'query' | 'conversational' {
+    if (text.split(/\s+/).length > 40) return 'compress';
+    if (text.split('\n').filter(l => l.trim()).length > 3) return 'compress';
+    if (/```/.test(text)) return 'compress';
+    if (/^\s*\d+\.\s/m.test(text)) return 'compress';
+    if (/^\s*[-•–]\s/m.test(text)) return 'compress';
+    if (this.isConversational(text)) return 'conversational';
+    return 'query';
+  }
+
+  // Conversational signals (pattern-based, no word lists):
+  // ≥2 question marks, OR question + personal pronoun + multiple sentences
+  private isConversational(text: string): boolean {
+    const qCount = (text.match(/\?/g) || []).length;
+    const hasPersonal = /\b(eu|tu|você|vocês|nós|I|we|you)\b/i.test(text);
+    const sCount = text.split(/[.!?]+/).filter(s => s.trim().length > 2).length;
+    return qCount >= 2 || (qCount >= 1 && hasPersonal && sCount >= 2);
   }
 
   // ═══════════════════════════════════════════════════
@@ -240,11 +258,9 @@ export class PithEngine {
       if (ratio > 0.02) score -= Math.min(Math.floor(ratio * 60), 6);
     }
 
-    // 4. Verb penalty — infinitives -2 (content verbs), conjugated -3 (auxiliary/filler)
-    if (clean.length >= 6) {
-      if (PithEngine.VERB_INFINITIVE.test(clean.toLowerCase())) score -= 2;
-      else if (PithEngine.VERB_CONJUGATED.test(clean.toLowerCase())) score -= 3;
-    }
+    // 4. Verb penalty — only conjugated forms (auxiliary/filler): -3
+    // Infinitives are content verbs → no penalty (they become !action in queryPipeline)
+    if (clean.length >= 6 && PithEngine.VERB_CONJUGATED.test(clean.toLowerCase())) score -= 3;
 
     // 5. Position bonus — first word in a line is often key context
     if (isFirstInLine && !isSentenceStart) score += 2;
@@ -353,6 +369,9 @@ export class PithEngine {
       }
 
       const isSentenceStart = sentenceStarts.has(i);
+      // Negation doesn't cross sentence/clause boundaries
+      if (isSentenceStart) negateNext = false;
+
       const score = this.scoreWord(words[i], freq, totalWords, i === 0, isSentenceStart, isQuestion);
 
       if (score >= PithEngine.QUERY_THRESHOLD) {
@@ -476,6 +495,118 @@ export class PithEngine {
   }
 
   // ═══════════════════════════════════════════════════
+  // PIPELINE 3: CONVERSATIONAL (multi-sentence, implicit intent)
+  // [stance] ![action] #topic @entity ?attr
+  // stance: [?]=questioning [~]=negative [~?]=both
+  // ═══════════════════════════════════════════════════
+
+  private conversationalPipeline(text: string): { output: string; noiseRemoved: number } {
+    // Stance: detected from RAW text before noise removal
+    const qCount = (text.match(/\?/g) || []).length;
+    const negCount = (text.match(/\b(não|nao|not|never|sem|without|nem)\b|n't\b/gi) || []).length;
+    let stance = '';
+    if (negCount > 0 && qCount > 0) stance = '[~?]';
+    else if (negCount > 0) stance = '[~]';
+    else if (qCount >= 2) stance = '[?]';
+
+    const cleaned = this.humanNoiseLayer(text);
+    const originalWordCount = cleaned.split(/\s+/).length;
+    let workText = cleaned.replace(/[?!.…]+$/g, '').trim();
+    workText = workText.replace(/([a-zA-ZÀ-ÿ0-9])([,;])([a-zA-ZÀ-ÿ0-9])/g, '$1 $3');
+    workText = workText.replace(/([a-zA-ZÀ-ÿ0-9])\/([a-zA-ZÀ-ÿ0-9])/g, '$1 $2');
+
+    const freq = this.buildFreqMap(workText);
+    const totalWords = workText.split(/\s+/).length;
+    const words = workText.split(/\s+/);
+    const CONV_THRESHOLD = 5; // Lower than QUERY_THRESHOLD — capture broader context
+
+    const sentenceStarts = new Set<number>([0]);
+    for (let i = 0; i < words.length; i++) {
+      if (/[.!?]$/.test(words[i]) && i + 1 < words.length) sentenceStarts.add(i + 1);
+    }
+
+    const survivors: { word: string; score: number; origIdx: number }[] = [];
+    const seenLower = new Set<string>();
+
+    for (let i = 0; i < words.length; i++) {
+      const clean = words[i].replace(/[^a-zA-ZÀ-ÿ0-9-]/g, '');
+      if (!clean) continue;
+      const key = clean.toLowerCase();
+      if (seenLower.has(key)) continue;
+      seenLower.add(key);
+      const isSentenceStart = sentenceStarts.has(i);
+      const score = this.scoreWord(words[i], freq, totalWords, i === 0, isSentenceStart, false);
+      if (score >= CONV_THRESHOLD) survivors.push({ word: clean, score, origIdx: i });
+    }
+
+    // Normalize sentence-start capitalization
+    for (let si = 0; si < survivors.length; si++) {
+      const w = survivors[si].word;
+      if (sentenceStarts.has(survivors[si].origIdx) && !/^[A-Z][A-Z0-9]+$/.test(w)) {
+        survivors[si] = { ...survivors[si], word: w.toLowerCase() };
+      }
+    }
+
+    const fused = this.fuseProperNouns(survivors);
+
+    // Compound action: top 2 infinitives (same logic as queryPipeline)
+    const infinitives = fused
+      .filter(item =>
+        !/\d/.test(item.word) &&
+        !/^[A-Z]/.test(item.word) &&
+        !PithEngine.ADJECTIVE_SUFFIX.test(item.word.toLowerCase()) &&
+        PithEngine.VERB_INFINITIVE.test(item.word.toLowerCase())
+      )
+      .sort((a, b) => b.score - a.score);
+    const actionWords = infinitives.slice(0, 2).map(i => i.word);
+    const actionKeys = new Set(actionWords.map(w => w.toLowerCase()));
+    let action = actionWords.length === 2
+      ? `![${actionWords[0]}|${actionWords[1]}]`
+      : actionWords.length === 1
+        ? '!' + actionWords[0]
+        : '';
+
+    const niches: { word: string; score: number }[] = [];
+    const entities: string[] = [];
+    const attrs: string[] = [];
+    const seen = new Set<string>();
+
+    for (const item of fused) {
+      const key = item.word.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (/\d/.test(item.word)) { attrs.push('?' + item.word); continue; }
+      if (PithEngine.ADJECTIVE_SUFFIX.test(key)) { attrs.push('?' + key); continue; }
+      if (/^[A-Z]/.test(item.word)) { entities.push('@' + item.word); continue; }
+      if (actionKeys.has(key)) continue;
+      if (!action) action = '!' + item.word;
+      else niches.push({ word: '#' + item.word, score: item.score });
+    }
+
+    const topNiches = niches
+      .sort((a, b) => b.score - a.score)
+      .slice(0, PithEngine.MAX_QUERY_NICHES)
+      .map(n => n.word);
+
+    const parts: string[] = [];
+    if (stance) parts.push(stance);
+    if (action) parts.push(action);
+    for (const n of topNiches) parts.push(n);
+    for (const e of entities) parts.push(e);
+    for (const a of attrs.slice(0, 3)) parts.push(a);
+
+    const finalOutput = parts.join(' ').trim();
+    if (!finalOutput) return { output: text, noiseRemoved: 0 };
+
+    const outputWordCount = finalOutput.split(/\s+/).length;
+    const noise = originalWordCount > 0
+      ? Math.max(0, Math.floor(((originalWordCount - outputWordCount) / originalWordCount) * 100))
+      : 0;
+
+    return { output: finalOutput, noiseRemoved: noise };
+  }
+
+  // ═══════════════════════════════════════════════════
   // SHARED LAYERS
   // ═══════════════════════════════════════════════════
 
@@ -494,10 +625,14 @@ export class PithEngine {
     // PT intent/desire markers — pure framing, zero content
     r = r.replace(/\b(quero|queria|gostaria( de)?|preciso( de)?|precisamos( de)?|queremos|desejo|desejamos)\s+/gi, '');
 
+    // PT causal subordinators — clause connectors, zero content payload
+    r = r.replace(/\bporque\b[,]?\s*/gi, '');  // "because" (≠ "por que" = "why?")
+    r = r.replace(/\bpois\b[,]?\s*/gi, '');    // "since/for/because"
+
     // PT connectives → symbols
     r = r.replace(/\balém disso\b[,]?\s*/gi, '+ ');
     r = r.replace(/\b(no entanto|porém|todavia|contudo|entretanto)\b[,]?\s*/gi, '| ');
-    r = r.replace(/\b(portanto|logo|por isso|dessa forma|assim sendo)\b[,]?\s*/gi, '→ ');
+    r = r.replace(/\b(portanto|logo|por isso|dessa forma|assim sendo|então|assim)\b[,]?\s*/gi, '→ ');
     r = r.replace(/\b(mesmo que|ainda que|embora)\b\s*/gi, '~ ');
     r = r.replace(/\b(para que|tudo para|a fim de que)\b\s*/gi, '');
 
