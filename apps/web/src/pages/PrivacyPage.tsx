@@ -1,31 +1,33 @@
 import { Shield, Lock, EyeOff, Database, TerminalSquare, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function PrivacyPage() {
+  const { t } = useTranslation();
   const sections = [
     {
       icon: EyeOff,
-      title: "1. Privacidade Ativa por Design (Zero Data Retention)",
-      content: "O PITH foi construído sob um princípio fundamental: seus dados originais não nos pertencem. Ao utilizar nossa API ou extensão, o texto do seu prompt original é processado pela nossa Engine de Destilação (Zero-G) em memória. Nós não salvamos o conteúdo do que você digita, nem o resultado gerado. Armazenamos exclusivamente metadados matemáticos (quantos caracteres entraram, quantos saíram, tokens economizados) para fins de faturamento e exibição no seu dashboard."
+      title: t('privacy.sections.s1_title'),
+      content: t('privacy.sections.s1_desc')
     },
     {
       icon: TerminalSquare,
-      title: "2. PITH e Modelos de IA (OpenAI, Anthropic, etc)",
-      content: "O PITH age como um middleware restritivo. Nós não enviamos seus dados para a OpenAI, Google ou Anthropic em seu nome a partir dos nossos servidores. O PITH converte o seu prompt extenso em 'Linguagem de Máquina' (PITH) e devolve para você (ou para a sua máquina local via extensão/API). O envio posterior desse texto destilado para a IA final fica sob seu total controle e responsabilidade, utilizando as suas próprias credenciais."
+      title: t('privacy.sections.s2_title'),
+      content: t('privacy.sections.s2_desc')
     },
     {
       icon: Database,
-      title: "3. Dados que Coletamos",
-      content: "Para o funcionamento da plataforma web, coletamos dados estritamente operacionais através do nosso provedor de autenticação (Supabase) e pagamentos (Stripe). Isso inclui: endereço de e-mail (para login e comunicação operacional), histórico de uso financeiro (tokens economizados), ID da extensão e chaves de API (criptografadas)."
+      title: t('privacy.sections.s3_title'),
+      content: t('privacy.sections.s3_desc')
     },
     {
       icon: RefreshCw,
-      title: "4. Sincronização da Extensão",
-      content: "A extensão do Chrome do PITH processa o texto localmente na aba ativa do seu navegador. Se você estiver utilizando uma conta PITH conectada, a extensão se comunica com nossos servidores apenas para sincronizar seu histórico matemático de tokens salvos e cota mensal. Em nenhum momento o conteúdo das suas conversas locais do ChatGPT ou Claude é transmitido para os servidores do PITH."
+      title: t('privacy.sections.s4_title'),
+      content: t('privacy.sections.s4_desc')
     },
     {
       icon: Lock,
-      title: "5. Segurança e Armazenamento",
-      content: "Toda comunicação com nossos servidores é criptografada via HTTPS/TLS. Os metadados operacionais e informações de conta são armazenados em infraestrutura serverless segura. Suas chaves de API geradas na plataforma são restritas e não devem ser expostas publicamente no lado do cliente (Client-Side)."
+      title: t('privacy.sections.s5_title'),
+      content: t('privacy.sections.s5_desc')
     }
   ];
 
@@ -34,11 +36,11 @@ export default function PrivacyPage() {
       <div className="mb-16">
         <div className="flex items-center gap-3 text-emerald-400 mb-6">
           <Shield size={32} />
-          <h1 className="text-4xl font-extrabold text-white tracking-tight">Política de Privacidade</h1>
+          <h1 className="text-4xl font-extrabold text-white tracking-tight">{t('privacy.title')}</h1>
         </div>
         <p className="text-slate-400 text-lg leading-relaxed max-w-2xl">
-          Última atualização: {new Date().toLocaleDateString('pt-BR')} <br />
-          No PITH, acreditamos que sua propriedade intelectual deve permanecer com você. Nós reduzimos tokens, não a sua privacidade.
+          {t('privacy.updated')} {new Date().toLocaleDateString()} <br />
+          {t('privacy.hero')}
         </p>
       </div>
 
@@ -65,9 +67,9 @@ export default function PrivacyPage() {
 
       <div className="mt-20 pt-10 border-t border-slate-800 text-center">
         <p className="text-slate-500">
-          Dúvidas sobre como tratamos seus dados? Entre em contato enviando um oi no{' '}
+          {t('privacy.footer.questions')}{' '}
           <a href="mailto:oi@pith.app" className="text-emerald-400 hover:text-emerald-300 transition-colors underline underline-offset-4 decoration-emerald-400/30">
-            suporte
+            {t('privacy.footer.support')}
           </a>.
         </p>
       </div>

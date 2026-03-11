@@ -1,0 +1,207 @@
+{
+  "nav": {
+    "how_it_works": "Comment ça marche",
+    "pricing": "Tarifs",
+    "docs": "API Docs",
+    "login": "Connexion",
+    "start_free": "Commencer gratuitement",
+    "logout": "Déconnexion",
+    "dashboard": "Dashboard"
+  },
+  "footer": {
+    "rights": "Tous droits réservés.",
+    "terms": "Conditions",
+    "privacy": "Confidentialité",
+    "contact": "Contact"
+  },
+  "landing": {
+    "hero": {
+      "title_1": "Supprimez le bruit.",
+      "title_2": "Parlez le langage de la machine.",
+      "subtitle": "PITH distille vos prompts en supprimant la verbosité humaine. Économisez des tokens, obtenez des réponses plus directes et augmentez l'efficacité de vos appels IA.",
+      "install_btn": "Installer l'Extension (Gratuit)",
+      "docs_btn": "Voir la Documentation API"
+    },
+    "demo": {
+      "title": "PITH Demo",
+      "input_label": "Prompt Original (Verbeux)",
+      "input_placeholder": "Tapez votre prompt ici...",
+      "default_input": "J'ai besoin que vous m'aidiez à réfléchir à la façon dont je devrais construire le backend d'un système d'achat de billets. Je veux m'assurer que le système prend en charge plusieurs devises et différentes catégories de produits comme VIP, Premiere et Stage. Pouvez-vous m'aider à trouver la meilleure approche ?",
+      "output_label": "PITH",
+      "distilling": "Distillation...",
+      "noise": "Bruit",
+      "tokens_saved": "tk sauvés"
+    },
+    "how_it_works": {
+      "title": "Comment fonctionne PITH",
+      "subtitle": "Un processus simple en trois étapes qui transforme votre interaction avec les LLMs.",
+      "step_1_title": "1. Écrivez Naturellement",
+      "step_1_desc": "Utilisez PITH dans l'extension Chrome ou l'API. Écrivez comme vous le faites toujours — ne changez pas votre façon de travailler.",
+      "step_2_title": "2. PITH Compresse",
+      "step_2_desc": "Avant d'atteindre l'IA, votre prompt est distillé : mots vides supprimés, intention pure conservée. Moins de tokens, même résultat.",
+      "step_3_title": "3. Vous économisez",
+      "step_3_desc": "Moins de tokens = moins d'argent dépensé. Chaque compression réduit vos coûts sur GPT-4, Claude et autres LLMs."
+    },
+    "pricing": {
+      "title": "La bonne taille pour vous",
+      "subtitle": "De l'usage quotidien aux intégrations d'entreprise. Choisissez comment utiliser PITH.",
+      "extension_title": "PITH Extension",
+      "extension_desc": "Pour les utilisateurs qui veulent de meilleures réponses de ChatGPT et Claude.",
+      "free": "Gratuit",
+      "pro_price": "Ou PRO pour 7$/mois",
+      "ext_feature_1": "100 compressions/mois (Gratuit)",
+      "ext_feature_2": "Illimité + Sync (PRO)",
+      "ext_feature_3": "Fonctionne sur n'importe quel onglet",
+      "ext_btn": "Installer l'Extension",
+      "api_badge": "Pour les Développeurs",
+      "api_title": "API SaaS @pith/core",
+      "api_desc": "Distillez les prompts de vos utilisateurs avant d'appeler OpenAI, économisant des tokens pour votre entreprise.",
+      "pay_as_you_go": "Pay-as-you-go",
+      "api_subtitle": "Couvrez vos coûts avec les économies générées",
+      "api_feature_1": "API REST ultra-rapide",
+      "api_feature_2": "Tableau de bord d'économies",
+      "api_feature_3": "Réduit les hallucinations du LLM",
+      "api_btn": "Accéder aux Clés API",
+      "vscode_title": "VS Code Marketplace",
+      "vscode_desc": "Accès direct depuis votre IDE pour générer du code plus rapidement avec l'IA.",
+      "lifetime": "Licence à vie (Paiement unique)",
+      "vsc_feature_1": "Paiement unique",
+      "vsc_feature_2": "Utilisation locale illimitée",
+      "vsc_feature_3": "Support Cursor/Copilot",
+      "vsc_btn": "Acheter une Licence"
+    }
+  },
+  "dashboard": {
+    "auth": {
+      "title": "Connectez-vous pour continuer",
+      "subtitle": "Accédez à votre tableau de bord de compressions, d'économies et de paramètres.",
+      "btn": "Connexion / Créer un compte"
+    },
+    "header": {
+      "title": "Tableau de Bord",
+      "pro": "Compte PRO",
+      "free": "Plan Gratuit",
+      "refresh": "Actualiser les données"
+    },
+    "stats": {
+      "tokens": "Tokens Économisés",
+      "tokens_unit": "tokens",
+      "dollars": "Dollars Économisés",
+      "dollars_unit": "en appels API",
+      "compressions": "Compressions Totales",
+      "compressions_unit": "total",
+      "noise": "Bruit Moyen Supprimé",
+      "noise_unit": "par prompt"
+    },
+    "usage": {
+      "title": "Utilisation Mensuelle",
+      "share": "Partager",
+      "copied": "Copié !",
+      "share_text": "J'ai déjà distillé {{tokens}} tokens avec PITH — économisant ${{dollars}} 🔥",
+      "used": "Compressions utilisées",
+      "limit_reached": "Limite mensuelle atteinte. Passez à PRO pour un accès illimité.",
+      "upgrade_btn": "Passer à PRO — 7$/mois",
+      "unlimited": "Accès illimité actif. Profitez-en !"
+    },
+    "distiller": {
+      "title": "Distillateur Rapide",
+      "placeholder": "Tapez votre prompt verbeux ici...",
+      "btn": "Distiller",
+      "output_label": "PITH Output",
+      "noise_label": "-{{noise}}% Bruit",
+      "copy_title": "Copier"
+    },
+    "api_key": {
+      "title": "Clé API",
+      "copy_btn": "Copier la clé",
+      "empty_1": "Votre clé API apparaîtra ici après l'inscription.",
+      "empty_2": "L'accès à l'API nécessite un plan PRO."
+    },
+    "account": {
+      "title": "Compte",
+      "email": "Email",
+      "plan": "Plan",
+      "tokens": "Tokens mensuels",
+      "logout": "Se déconnecter"
+    }
+  },
+  "docs": {
+    "header": {
+      "title": "Documentation API",
+      "subtitle": "L'API PITH compresse vos prompts avant de les envoyer à n'importe quel LLM. Utilisez-la dans n'importe quel langage avec un simple appel HTTP."
+    },
+    "auth": {
+      "title": "Authentification",
+      "subtitle": "Méthodes d'authentification acceptées dans l'en-tête Authorization :",
+      "api_key": "1. Clé API (Serveur à Serveur)",
+      "jwt": "2. JWT (Côté Client)",
+      "note": "La route /v1/license/validate ne nécessite pas d'en-tête d'autorisation, car la clé est dans le corps de la requête."
+    },
+    "rate_limit": {
+      "title": "Rate Limiting",
+      "free": "100 compressions / mois",
+      "pro": "Illimité",
+      "dashboard_link": "Générez votre clé API dans le tableau de bord"
+    },
+    "endpoints": {
+      "groups": {
+        "compression": "Compression",
+        "stats": "Statistiques",
+        "user": "Utilisateur",
+        "extension": "Extension"
+      },
+      "table": {
+        "field": "Champ",
+        "type": "Type",
+        "required": "Requis",
+        "description": "Description",
+        "yes": "oui",
+        "no": "non"
+      },
+      "summary": {
+         "optimize": "Compresse un prompt avec le moteur PITH. Supprime la verbosité, les mots de remplissage et le bruit sémantique. Retourne le texte distillé et les métriques de compression. Nécessite une authentification et respecte les limites du plan (100/mois en Free, illimité en Pro).",
+         "stats": "Retourne les statistiques cumulées de l'utilisateur : tokens économisés, compressions totales, moyenne de bruit supprimé, économies en dollars et utilisation du mois en cours.",
+         "user": "Retourne le profil de l'utilisateur : ID, pack actuel (free | pro) et la clé API si elle existe.",
+         "api_key": "Génère ou renouvelle la clé API de l'utilisateur. Opération destructive : la clé précédente est immédiatement invalidée. Uniquement pour les membres Pro.",
+         "sync": "Synchronise les tokens économisés localement (accumulés hors ligne ou via l'extension) avec le backend. Utile pour consolider les métriques entre appareils.",
+         "validate": "Valide une clé API pour les extensions (VS Code, Chrome). Retourne le niveau du compte et les fonctionnalités débloquées."
+      }
+    },
+    "errors": {
+      "title": "Codes d'Erreur",
+      "status": "Statut",
+      "meaning": "Signification",
+      "e400": "Corps de requête invalide : champ requis manquant ou hors limites.",
+      "e401": "Token manquant ou expiré.",
+      "e403": "L'opération nécessite un compte Pro.",
+      "e429": "Limite mensuelle atteinte (Free). Veuillez passer à Pro.",
+      "e500": "Erreur interne du serveur."
+    },
+    "quick_start": {
+      "title": "Quick Start — Node.js",
+      "instruction": "// Utilisez output au lieu de userPrompt lors de l'appel à OpenAI",
+      "savings": "Chaque appel à PITH permet d'économiser en moyenne 40 à 60 % des tokens envoyés à OpenAI."
+    }
+  },
+  "privacy": {
+    "title": "Politique de Confidentialité",
+    "updated": "Dernière mise à jour :",
+    "hero": "Chez PITH, nous pensons que votre propriété intellectuelle doit vous rester. Nous réduisons les tokens, pas votre vie privée.",
+    "sections": {
+      "s1_title": "1. Confidentialité Active par Design (Zéro Rétention de Données)",
+      "s1_desc": "PITH a été construit sur un principe fondamental : vos données originales ne nous appartiennent pas. Lors de l'utilisation de notre API ou extension, le texte de votre prompt original est traité en mémoire par notre moteur de distillation (Zero-G). Nous ne sauvegardons pas ce que vous tapez, ni le résultat. Nous stockons exclusivement des métadonnées mathématiques (caractères entrants/sortants, tokens économisés) à des fins de facturation et d'affichage dans votre tableau de bord.",
+      "s2_title": "2. PITH et Modèles d'IA (OpenAI, Anthropic, etc.)",
+      "s2_desc": "PITH agit comme un middleware restrictif. Nous n'envoyons pas vos données à OpenAI, Google ou Anthropic en votre nom depuis nos serveurs. PITH convertit votre prompt étendu en 'Langage Machine' (PITH) et vous le renvoie. L'envoi ultérieur de ce texte distillé à l'IA finale reste sous votre entiers contrôle et responsabilité, en utilisant vos propres identifiants.",
+      "s3_title": "3. Données que Nous Collectons",
+      "s3_desc": "Pour le fonctionnement de la plateforme web, nous collectons des données strictement opérationnelles via notre fournisseur d'authentification (Supabase) et de paiement (Stripe). Cela inclut : adresse e-mail (pour la connexion et la communication opérationnelle), historique financier (tokens économisés), ID de l'extension et clés API (chiffrées).",
+      "s4_title": "4. Synchronisation de l'Extension",
+      "s4_desc": "L'extension Chrome de PITH traite le texte localement dans l'onglet actif de votre navigateur. Si vous utilisez un compte PITH connecté, l'extension communique avec nos serveurs uniquement pour synchroniser votre historique mathématique de tokens sauvés et votre quota mensuel. À aucun moment le contenu de vos conversations ChatGPT ou Claude n'est transmis aux serveurs PITH.",
+      "s5_title": "5. Sécurité et Stockage",
+      "s5_desc": "Toutes les communications avec nos serveurs sont chiffrées via HTTPS/TLS. Les métadonnées opérationnelles et les informations de compte sont stockées sur une infrastructure serverless sécurisée. Vos clés API sont confidentielles et ne doivent pas être exposées publiquement côté client."
+    },
+    "footer": {
+      "questions": "Des questions sur la façon dont nous traitons vos données ? Contactez-nous en envoyant un message au",
+      "support": "support"
+    }
+  }
+}

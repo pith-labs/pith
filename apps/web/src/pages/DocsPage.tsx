@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 import { Terminal, Lock, Zap, BarChart2, User, Key, RefreshCw, ChevronRight, Copy, Check } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const BASE_URL = 'https://pith.onrender.com';
 
 // ── Code block with copy ──────────────────────────────────────────────────────
 function CodeBlock({ code, lang = 'bash' }: { code: string; lang?: string }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const copy = () => {
     navigator.clipboard.writeText(code);
@@ -21,7 +23,7 @@ function CodeBlock({ code, lang = 'bash' }: { code: string; lang?: string }) {
       <button
         onClick={copy}
         className="absolute top-3 right-3 p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-500 hover:text-white transition-all opacity-0 group-hover:opacity-100"
-        title="Copiar"
+        title={t('dashboard.distiller.copy_title')}
       >
         {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
       </button>
@@ -43,6 +45,7 @@ interface EndpointProps {
 }
 
 function Endpoint({ method, path, summary, auth = true, pro = false, body, response, example }: EndpointProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const colors: Record<string, string> = {
     GET: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
@@ -58,7 +61,7 @@ function Endpoint({ method, path, summary, auth = true, pro = false, body, respo
         <span className={`text-xs font-bold font-mono px-2.5 py-1 rounded-lg border ${colors[method]}`}>{method}</span>
         <code className="text-slate-200 font-mono text-sm flex-1">{BASE_URL}{path}</code>
         <div className="flex items-center gap-2 shrink-0">
-          {auth && <span className="flex items-center gap-1 text-xs text-slate-500 font-mono"><Lock size={10}/> auth</span>}
+          {auth && <span className="flex items-center gap-1 text-xs text-slate-500 font-mono"><Lock size={10}/> {t('docs.auth.title').toLowerCase()}</span>}
           {pro && <span className="flex items-center gap-1 text-xs text-amber-400/80 font-mono"><Key size={10}/> pro</span>}
         </div>
         <ChevronRight size={16} className={`text-slate-500 transition-transform ${open ? 'rotate-90' : ''}`} />
@@ -75,10 +78,10 @@ function Endpoint({ method, path, summary, auth = true, pro = false, body, respo
                 <table className="w-full text-sm">
                   <thead className="bg-slate-800/50">
                     <tr>
-                      <th className="text-left px-4 py-2.5 text-slate-400 font-medium text-xs">Campo</th>
-                      <th className="text-left px-4 py-2.5 text-slate-400 font-medium text-xs">Tipo</th>
-                      <th className="text-left px-4 py-2.5 text-slate-400 font-medium text-xs">Obrigatório</th>
-                      <th className="text-left px-4 py-2.5 text-slate-400 font-medium text-xs">Descrição</th>
+                      <th className="text-left px-4 py-2.5 text-slate-400 font-medium text-xs">{t('docs.endpoints.table.field')}</th>
+                      <th className="text-left px-4 py-2.5 text-slate-400 font-medium text-xs">{t('docs.endpoints.table.type')}</th>
+                      <th className="text-left px-4 py-2.5 text-slate-400 font-medium text-xs">{t('docs.endpoints.table.required')}</th>
+                      <th className="text-left px-4 py-2.5 text-slate-400 font-medium text-xs">{t('docs.endpoints.table.description')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
@@ -86,7 +89,7 @@ function Endpoint({ method, path, summary, auth = true, pro = false, body, respo
                       <tr key={p.name}>
                         <td className="px-4 py-3 font-mono text-emerald-400 text-xs">{p.name}</td>
                         <td className="px-4 py-3 font-mono text-indigo-400 text-xs">{p.type}</td>
-                        <td className="px-4 py-3 text-xs text-slate-500">{p.required ? <span className="text-rose-400">sim</span> : 'não'}</td>
+                        <td className="px-4 py-3 text-xs text-slate-500">{p.required ? <span className="text-rose-400">{t('docs.endpoints.table.yes')}</span> : t('docs.endpoints.table.no')}</td>
                         <td className="px-4 py-3 text-xs text-slate-400">{p.desc}</td>
                       </tr>
                     ))}
@@ -113,16 +116,17 @@ function Endpoint({ method, path, summary, auth = true, pro = false, body, respo
 
 // ── Docs Page ─────────────────────────────────────────────────────────────────
 export default function DocsPage() {
+  const { t } = useTranslation();
   const { session } = useAuth();
 
   const endpoints: EndpointProps[] = [
     {
       method: 'POST',
       path: '/v1/optimize',
-      summary: 'Comprime um prompt usando o motor PITH. Remove verbosidade, filler words e ruído semântico. Retorna o texto destilado e as métricas de compressão. Requer autenticação e respeita o rate limit do plano (100/mês no Free, ilimitado no Pro).',
+      summary: t('docs.endpoints.summary.optimize'),
       auth: true,
       body: [
-        { name: 'text', type: 'string', required: true, desc: 'Texto do prompt a ser comprimido. Máx: 50.000 caracteres.' },
+        { name: 'text', type: 'string', required: true, desc: t('landing.demo.input_placeholder') },
       ],
       response: `{
   "output": "BFF [Tickets] backend: multi-currency support + VIP/Premiere/Stage categories",
@@ -138,7 +142,7 @@ export default function DocsPage() {
     {
       method: 'GET',
       path: '/v1/stats',
-      summary: 'Retorna as estatísticas acumuladas do usuário autenticado: total de tokens economizados, total de compressões realizadas, média de ruído removido, economia em dólares e uso do mês corrente.',
+      summary: t('docs.endpoints.summary.stats'),
       auth: true,
       response: `{
   "totalTokensSaved": 142800,
@@ -154,7 +158,7 @@ export default function DocsPage() {
     {
       method: 'GET',
       path: '/v1/user',
-      summary: 'Retorna o perfil do usuário autenticado: ID, plano atual (free | pro) e a chave de API, se existir.',
+      summary: t('docs.endpoints.summary.user'),
       auth: true,
       response: `{
   "id": "uuid-do-usuario",
@@ -168,7 +172,7 @@ export default function DocsPage() {
     {
       method: 'POST',
       path: '/v1/user/api-key',
-      summary: 'Gera ou rotaciona a chave de API do usuário. Operação destrutiva — a chave anterior é invalidada imediatamente. Disponível apenas para usuários com plano Pro.',
+      summary: t('docs.endpoints.summary.api_key'),
       auth: true,
       pro: true,
       response: `{
@@ -180,10 +184,10 @@ export default function DocsPage() {
     {
       method: 'PATCH',
       path: '/v1/user/sync',
-      summary: 'Sincroniza tokens economizados localmente (acumulados offline ou via extensão) com o backend. Útil para consolidar métricas cross-device após login.',
+      summary: t('docs.endpoints.summary.sync'),
       auth: true,
       body: [
-        { name: 'tokensSaved', type: 'number', required: true, desc: 'Quantidade de tokens economizados localmente a adicionar ao histórico.' },
+        { name: 'tokensSaved', type: 'number', required: true, desc: t('dashboard.stats.tokens_unit') },
       ],
       response: `{
   "synced": true
@@ -196,10 +200,10 @@ export default function DocsPage() {
     {
       method: 'POST',
       path: '/v1/license/validate',
-      summary: 'Valida uma API Key para uso em extensões (VS Code, Chrome). Retorna o plano do usuário e as features liberadas.',
+      summary: t('docs.endpoints.summary.validate'),
       auth: false,
       body: [
-        { name: 'key', type: 'string', required: true, desc: 'A API Key gerada no dashboard do usuário.' },
+        { name: 'key', type: 'string', required: true, desc: t('dashboard.api_key.empty_1') },
       ],
       response: `{
   "valid": true,
@@ -218,10 +222,10 @@ export default function DocsPage() {
   ];
 
   const groups = [
-    { label: 'Compressão', icon: Zap, ids: [0] },
-    { label: 'Estatísticas', icon: BarChart2, ids: [1] },
-    { label: 'Usuário', icon: User, ids: [2, 3, 4] },
-    { label: 'Extensão', icon: Terminal, ids: [5] },
+    { label: t('docs.endpoints.groups.compression'), icon: Zap, ids: [0] },
+    { label: t('docs.endpoints.groups.stats'), icon: BarChart2, ids: [1] },
+    { label: t('docs.endpoints.groups.user'), icon: User, ids: [2, 3, 4] },
+    { label: t('docs.endpoints.groups.extension'), icon: Terminal, ids: [5] },
   ];
 
   return (
@@ -234,40 +238,40 @@ export default function DocsPage() {
           <span className="text-slate-700">/</span>
           <span className="text-emerald-400">v1</span>
         </div>
-        <h1 className="text-4xl font-extrabold text-white mb-4">Documentação da API</h1>
+        <h1 className="text-4xl font-extrabold text-white mb-4">{t('docs.header.title')}</h1>
         <p className="text-slate-400 text-lg max-w-2xl leading-relaxed">
-          A API do PITH comprime seus prompts antes de enviá-los a qualquer LLM. Use em qualquer linguagem com uma única chamada HTTP.
+          {t('docs.header.subtitle')}
         </p>
       </div>
 
       {/* Auth section */}
       <div className="grid md:grid-cols-2 gap-6 mb-12">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-          <h2 className="font-bold text-white mb-2 flex items-center gap-2"><Lock size={16} className="text-emerald-400" /> Autenticação</h2>
+          <h2 className="font-bold text-white mb-2 flex items-center gap-2"><Lock size={16} className="text-emerald-400" /> {t('docs.auth.title')}</h2>
           <p className="text-slate-400 text-sm mb-4 leading-relaxed">
-            Passagens de autenticação aceitas no header <code className="text-emerald-400 text-xs font-mono">Authorization</code>:
+            {t('docs.auth.subtitle')} <code className="text-emerald-400 text-xs font-mono">Authorization</code>:
           </p>
           <div className="space-y-4">
             <div>
-              <p className="text-xs text-slate-500 mb-1 font-semibold uppercase tracking-wider">1. API Key (Servidor para Servidor)</p>
+              <p className="text-xs text-slate-500 mb-1 font-semibold uppercase tracking-wider">{t('docs.auth.api_key')}</p>
               <CodeBlock code={`Authorization: pith_live_xxxxxxxxxxxxxxxxxxxx`} />
             </div>
             <div>
-              <p className="text-xs text-slate-500 mb-1 font-semibold uppercase tracking-wider">2. JWT (Client Side)</p>
+              <p className="text-xs text-slate-500 mb-1 font-semibold uppercase tracking-wider">{t('docs.auth.jwt')}</p>
               <CodeBlock code={`Authorization: Bearer eyJhbGci...`} />
             </div>
           </div>
           <p className="text-xs text-slate-500 mt-4 pt-4 border-t border-slate-800">
-            A rota <code className="text-emerald-400 text-xs font-mono">/v1/license/validate</code> não exige header de autorização, pois a key vai no payload.
+            {t('docs.auth.note')}
           </p>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-          <h2 className="font-bold text-white mb-2 flex items-center gap-2"><RefreshCw size={16} className="text-emerald-400" /> Rate Limiting</h2>
+          <h2 className="font-bold text-white mb-2 flex items-center gap-2"><RefreshCw size={16} className="text-emerald-400" /> {t('docs.rate_limit.title')}</h2>
           <div className="space-y-3 text-sm">
             {[
-              { plan: 'Free', limit: '100 compressões / mês', color: 'text-slate-300' },
-              { plan: 'Pro', limit: 'Ilimitado', color: 'text-emerald-400' },
+              { plan: 'Free', limit: t('docs.rate_limit.free'), color: 'text-slate-300' },
+              { plan: 'Pro', limit: t('docs.rate_limit.pro'), color: 'text-emerald-400' },
             ].map(r => (
               <div key={r.plan} className="flex justify-between items-center py-2 border-b border-slate-800 last:border-0">
                 <span className="text-slate-500 font-mono">{r.plan}</span>
@@ -279,7 +283,7 @@ export default function DocsPage() {
           {!session && (
             <div className="mt-4 pt-4 border-t border-slate-800">
               <Link to="/dashboard" className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1">
-                Gerar sua API Key no dashboard <ChevronRight size={12} />
+                {t('docs.rate_limit.dashboard_link')} <ChevronRight size={12} />
               </Link>
             </div>
           )}
@@ -301,22 +305,22 @@ export default function DocsPage() {
 
       {/* Error codes */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-10">
-        <h2 className="font-bold text-white mb-4">Códigos de Erro</h2>
+        <h2 className="font-bold text-white mb-4">{t('docs.errors.title')}</h2>
         <div className="border border-slate-800 rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-800/50">
               <tr>
-                <th className="text-left px-4 py-2.5 text-slate-400 font-medium text-xs">Status</th>
-                <th className="text-left px-4 py-2.5 text-slate-400 font-medium text-xs">Significado</th>
+                <th className="text-left px-4 py-2.5 text-slate-400 font-medium text-xs">{t('docs.errors.status')}</th>
+                <th className="text-left px-4 py-2.5 text-slate-400 font-medium text-xs">{t('docs.errors.meaning')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
               {[
-                { code: '400', msg: 'Payload inválido — campo obrigatório ausente ou fora dos limites.' },
-                { code: '401', msg: 'Token ausente ou expirado.' },
-                { code: '403', msg: 'Operação requer plano Pro.' },
-                { code: '429', msg: 'Limite mensal atingido (Free). Faça upgrade.' },
-                { code: '500', msg: 'Erro interno do servidor.' },
+                { code: '400', msg: t('docs.errors.e400') },
+                { code: '401', msg: t('docs.errors.e401') },
+                { code: '403', msg: t('docs.errors.e403') },
+                { code: '429', msg: t('docs.errors.e429') },
+                { code: '500', msg: t('docs.errors.e500') },
               ].map(e => (
                 <tr key={e.code}>
                   <td className="px-4 py-3 font-mono text-rose-400 text-xs font-bold">{e.code}</td>
@@ -332,7 +336,7 @@ export default function DocsPage() {
       <div className="bg-slate-900 border border-emerald-500/20 rounded-2xl p-6">
         <h2 className="font-bold text-white mb-4 flex items-center gap-2">
           <Zap size={16} className="text-emerald-400" />
-          Quick Start — Node.js
+          {t('docs.quick_start.title')}
         </h2>
         <CodeBlock lang="js" code={`const res = await fetch('${BASE_URL}/v1/optimize', {
   method: 'POST',
@@ -345,13 +349,13 @@ export default function DocsPage() {
 
 const { output, tokensSaved, noiseRemoved } = await res.json();
 
-// Use \`output\` no lugar de \`userPrompt\` ao chamar a OpenAI
+// ${t('docs.quick_start.instruction').replace('// ', '')}
 const completion = await openai.chat.completions.create({
   model: 'gpt-4o',
   messages: [{ role: 'user', content: output }],
 });`} />
         <p className="text-xs text-slate-500 mt-4">
-          Cada chamada ao PITH economiza em média <span className="text-emerald-400 font-mono">40–60%</span> dos tokens enviados à OpenAI.
+          {t('docs.quick_start.savings')}
         </p>
       </div>
     </div>

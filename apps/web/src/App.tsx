@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { TerminalSquare, LogOut, Crown, LayoutDashboard } from 'lucide-react';
 import { AuthProvider, useAuth } from './lib/AuthContext';
+import { useTranslation } from 'react-i18next';
+import { LanguageSwitcher } from './components/LanguageSwitcher';
 import AuthModal from './components/AuthModal';
 import LandingPage from './pages/LandingPage';
 import DashboardPage from './pages/DashboardPage';
@@ -10,6 +12,7 @@ import PrivacyPage from './pages/PrivacyPage';
 
 function Navbar() {
   const { session, logout } = useAuth();
+  const { t } = useTranslation();
   const [showAuth, setShowAuth] = useState(false);
   const navigate = useNavigate();
   const isPro = session?.tier === 'pro';
@@ -26,13 +29,13 @@ function Navbar() {
 
           {/* Nav Links */}
           <div className="hidden md:flex items-center gap-7 text-sm font-medium">
-            <a href="/#how-it-works" className="text-slate-400 hover:text-white transition-colors">Como funciona</a>
-            <a href="/#pricing" className="text-slate-400 hover:text-white transition-colors">Preços</a>
-            <Link to="/docs" className="text-slate-400 hover:text-white transition-colors">API Docs</Link>
+            <a href="/#how-it-works" className="text-slate-400 hover:text-white transition-colors">{t('nav.how_it_works')}</a>
+            <a href="/#pricing" className="text-slate-400 hover:text-white transition-colors">{t('nav.pricing')}</a>
+            <Link to="/docs" className="text-slate-400 hover:text-white transition-colors">{t('nav.docs')}</Link>
             {session && (
               <Link to="/dashboard" className="text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
                 <LayoutDashboard size={14} />
-                Dashboard
+                {t('nav.dashboard')}
               </Link>
             )}
           </div>
@@ -63,7 +66,7 @@ function Navbar() {
                 {/* Logout */}
                 <button
                   onClick={logout}
-                  title="Sair"
+                  title={t('nav.logout')}
                   className="p-2 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-400/10 transition-all"
                 >
                   <LogOut size={16} />
@@ -75,16 +78,20 @@ function Navbar() {
                   onClick={() => setShowAuth(true)}
                   className="text-sm text-slate-400 hover:text-white transition-colors"
                 >
-                  Entrar
+                  {t('nav.login')}
                 </button>
                 <button
                   onClick={() => setShowAuth(true)}
                   className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold text-sm transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_25px_rgba(16,185,129,0.4)]"
                 >
-                  Começar grátis
+                  {t('nav.start_free')}
                 </button>
               </>
             )}
+            {/* Language Switcher */}
+            <div className="ml-2 border-l border-slate-700 pl-4">
+               <LanguageSwitcher />
+            </div>
           </div>
         </div>
       </nav>
@@ -95,17 +102,18 @@ function Navbar() {
 }
 
 function Footer() {
+  const { t } = useTranslation();
   return (
     <footer className="border-t border-slate-800 bg-slate-950 py-12">
       <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-500">
         <div className="flex items-center gap-2">
           <TerminalSquare size={18} className="text-slate-700" />
-          <span>&copy; {new Date().getFullYear()} PITH. Todos os direitos reservados.</span>
+          <span>&copy; {new Date().getFullYear()} PITH. {t('footer.rights')}</span>
         </div>
         <div className="flex gap-6">
-          <a href="#" className="hover:text-slate-300 transition-colors">Termos</a>
-          <Link to="/privacidade" className="hover:text-slate-300 transition-colors">Privacidade</Link>
-          <a href="mailto:oi@pith.app" className="hover:text-slate-300 transition-colors">Contato</a>
+          <a href="#" className="hover:text-slate-300 transition-colors">{t('footer.terms')}</a>
+          <Link to="/privacidade" className="hover:text-slate-300 transition-colors">{t('footer.privacy')}</Link>
+          <a href="mailto:oi@pith.app" className="hover:text-slate-300 transition-colors">{t('footer.contact')}</a>
         </div>
       </div>
     </footer>

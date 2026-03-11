@@ -7,11 +7,13 @@ import {
   BarChart2, Key, ChevronRight, RefreshCw
 } from 'lucide-react';
 import { PithEngine } from '@pith/core';
+import { useTranslation } from 'react-i18next';
 
 const engine = new PithEngine();
 const FREE_MONTHLY_LIMIT = 100;
 
 export default function DashboardPage() {
+  const { t } = useTranslation();
   const { session, stats, profile, logout, refresh } = useAuth();
   const navigate = useNavigate();
   const [showAuth, setShowAuth] = useState(false);
@@ -44,7 +46,10 @@ export default function DashboardPage() {
 
   const handleShare = () => {
     navigator.clipboard.writeText(
-      `Já distilei ${totalTokens.toLocaleString('pt-BR')} tokens com PITH — economizei $${dollarsSaved.toFixed(2)} 🔥`
+      t('dashboard.usage.share_text', { 
+        tokens: totalTokens.toLocaleString('pt-BR'), 
+        dollars: dollarsSaved.toFixed(2) 
+      })
     );
     setShareCopied(true);
     setTimeout(() => setShareCopied(false), 2000);
@@ -64,13 +69,13 @@ export default function DashboardPage() {
           <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-6">
             <TerminalSquare size={28} className="text-emerald-400" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-3">Faça login para continuar</h1>
-          <p className="text-slate-400 mb-8">Acesse seu dashboard de compressões, economias e configurações.</p>
+          <h1 className="text-2xl font-bold text-white mb-3">{t('dashboard.auth.title')}</h1>
+          <p className="text-slate-400 mb-8">{t('dashboard.auth.subtitle')}</p>
           <button
             onClick={() => setShowAuth(true)}
             className="px-8 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)]"
           >
-            Entrar / Criar conta
+            {t('dashboard.auth.btn')}
           </button>
         </div>
         {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
@@ -83,7 +88,7 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-10">
         <div>
-          <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+          <h1 className="text-3xl font-bold text-white">{t('dashboard.header.title')}</h1>
           <p className="text-slate-400 mt-1 text-sm">{session.email}</p>
         </div>
 
@@ -94,12 +99,12 @@ export default function DashboardPage() {
               : 'bg-slate-700/50 text-slate-400 border-slate-600'
           }`}>
             {isPro && <Crown size={12} />}
-            {isPro ? 'Conta PRO' : 'Plano Free'}
+            {isPro ? t('dashboard.header.pro') : t('dashboard.header.free')}
           </span>
 
           <button
             onClick={handleRefresh}
-            title="Atualizar dados"
+            title={t('dashboard.header.refresh')}
             className="p-2 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-all"
           >
             <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
@@ -118,10 +123,10 @@ export default function DashboardPage() {
       {/* Stats grid */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { label: 'Tokens Salvos', value: totalTokens.toLocaleString('pt-BR'), unit: 'tokens', color: 'text-emerald-400' },
-          { label: 'Dólares Economizados', value: `$${dollarsSaved.toFixed(2)}`, unit: 'em chamadas de API', color: 'text-white' },
-          { label: 'Compressões Lifetime', value: stats?.totalCompressions.toLocaleString('pt-BR') ?? '—', unit: 'total', color: 'text-indigo-400' },
-          { label: 'Ruído Removido Médio', value: stats ? `${stats.avgNoiseRemoved.toFixed(0)}%` : '—', unit: 'por prompt', color: 'text-rose-400' },
+          { label: t('dashboard.stats.tokens'), value: totalTokens.toLocaleString('pt-BR'), unit: t('dashboard.stats.tokens_unit'), color: 'text-emerald-400' },
+          { label: t('dashboard.stats.dollars'), value: `$${dollarsSaved.toFixed(2)}`, unit: t('dashboard.stats.dollars_unit'), color: 'text-white' },
+          { label: t('dashboard.stats.compressions'), value: stats?.totalCompressions.toLocaleString('pt-BR') ?? '—', unit: t('dashboard.stats.compressions_unit'), color: 'text-indigo-400' },
+          { label: t('dashboard.stats.noise'), value: stats ? `${stats.avgNoiseRemoved.toFixed(0)}%` : '—', unit: t('dashboard.stats.noise_unit'), color: 'text-rose-400' },
         ].map((stat) => (
           <div key={stat.label} className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
             <p className="text-slate-500 text-xs font-medium mb-2">{stat.label}</p>
@@ -139,21 +144,21 @@ export default function DashboardPage() {
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-bold text-white flex items-center gap-2">
                 <BarChart2 size={18} className="text-emerald-400" />
-                Uso Mensal
+                {t('dashboard.usage.title')}
               </h2>
               <button
                 onClick={handleShare}
                 className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-emerald-400 transition-colors"
               >
                 <Share2 size={14} />
-                {shareCopied ? 'Copiado!' : 'Compartilhar'}
+                {shareCopied ? t('dashboard.usage.copied') : t('dashboard.usage.share')}
               </button>
             </div>
 
             {!isPro ? (
               <>
                 <div className="flex justify-between text-sm font-mono mb-2">
-                  <span className="text-slate-400">Compressões usadas</span>
+                  <span className="text-slate-400">{t('dashboard.usage.used')}</span>
                   <span className={monthlyUsed >= FREE_MONTHLY_LIMIT ? 'text-rose-400 font-bold' : 'text-white'}>
                     {monthlyUsed} / {FREE_MONTHLY_LIMIT}
                   </span>
@@ -167,7 +172,7 @@ export default function DashboardPage() {
 
                 {monthlyUsed >= FREE_MONTHLY_LIMIT && (
                   <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 text-sm text-rose-400 mb-4">
-                    Limite mensal atingido. Faça upgrade para PRO para uso ilimitado.
+                    {t('dashboard.usage.limit_reached')}
                   </div>
                 )}
 
@@ -176,14 +181,14 @@ export default function DashboardPage() {
                   className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold text-sm transition-all flex items-center justify-center gap-2"
                 >
                   <Crown size={16} />
-                  Upgrade para PRO — $7/mês
+                  {t('dashboard.usage.upgrade_btn')}
                   <ChevronRight size={16} />
                 </button>
               </>
             ) : (
               <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-sm text-emerald-400 flex items-center gap-2">
                 <Zap size={16} />
-                Uso ilimitado ativo. Aproveite!
+                {t('dashboard.usage.unlimited')}
               </div>
             )}
           </div>
@@ -192,13 +197,13 @@ export default function DashboardPage() {
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
             <h2 className="font-bold text-white mb-4 flex items-center gap-2">
               <TerminalSquare size={18} className="text-emerald-400" />
-              Destilador Rápido
+              {t('dashboard.distiller.title')}
             </h2>
 
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Digite seu prompt verboso aqui..."
+              placeholder={t('dashboard.distiller.placeholder')}
               className="w-full h-24 bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm font-mono text-slate-300 focus:outline-none focus:border-indigo-500 resize-none mb-3"
             />
 
@@ -208,14 +213,14 @@ export default function DashboardPage() {
               className="w-full py-3 mb-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-900 font-bold text-sm transition-all flex items-center justify-center gap-2"
             >
               <Zap size={16} />
-              Destilar
+              {t('dashboard.distiller.btn')}
             </button>
 
             {output && (
               <>
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="text-emerald-400 font-mono">PITH Output</span>
-                  <span className="text-rose-400 font-mono font-bold">-{massaGorda}% Ruído</span>
+                  <span className="text-emerald-400 font-mono">{t('dashboard.distiller.output_label')}</span>
+                  <span className="text-rose-400 font-mono font-bold">{t('dashboard.distiller.noise_label', { noise: massaGorda })}</span>
                 </div>
                 <div className="relative">
                   <textarea
@@ -226,7 +231,7 @@ export default function DashboardPage() {
                   <button
                     onClick={() => navigator.clipboard.writeText(output)}
                     className="absolute top-2 right-2 p-1.5 bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
-                    title="Copiar"
+                    title={t('dashboard.distiller.copy_title')}
                   >
                     <Copy size={14} />
                   </button>
@@ -242,7 +247,7 @@ export default function DashboardPage() {
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
             <h2 className="font-bold text-white mb-4 flex items-center gap-2">
               <Key size={18} className="text-emerald-400" />
-              Chave de API
+              {t('dashboard.api_key.title')}
             </h2>
 
             {profile?.apiKey ? (
@@ -255,14 +260,14 @@ export default function DashboardPage() {
                   className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-colors flex items-center justify-center gap-2"
                 >
                   <Copy size={14} />
-                  {apiKeyCopied ? 'Copiado!' : 'Copiar chave'}
+                  {apiKeyCopied ? t('dashboard.usage.copied') : t('dashboard.api_key.copy_btn')}
                 </button>
               </>
             ) : (
               <div className="text-slate-500 text-sm">
-                <p className="mb-3">Sua chave de API aparecerá aqui após o cadastro.</p>
+                <p className="mb-3">{t('dashboard.api_key.empty_1')}</p>
                 {!isPro && (
-                  <p className="text-xs text-amber-400/80">Acesso à API requer plano PRO.</p>
+                  <p className="text-xs text-amber-400/80">{t('dashboard.api_key.empty_2')}</p>
                 )}
               </div>
             )}
@@ -270,20 +275,20 @@ export default function DashboardPage() {
 
           {/* Account info */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-            <h2 className="font-bold text-white mb-4">Conta</h2>
+            <h2 className="font-bold text-white mb-4">{t('dashboard.account.title')}</h2>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-slate-500">Email</span>
+                <span className="text-slate-500">{t('dashboard.account.email')}</span>
                 <span className="text-slate-300 truncate max-w-[160px]">{session.email}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Plano</span>
+                <span className="text-slate-500">{t('dashboard.account.plan')}</span>
                 <span className={isPro ? 'text-amber-400 font-bold' : 'text-slate-300'}>
                   {isPro ? 'PRO' : 'Free'}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Tokens mensais</span>
+                <span className="text-slate-500">{t('dashboard.account.tokens')}</span>
                 <span className="text-emerald-400 font-mono">
                   {stats?.monthlyTokensSaved.toLocaleString('pt-BR') ?? '0'}
                 </span>
@@ -296,7 +301,7 @@ export default function DashboardPage() {
                 className="w-full py-2.5 rounded-xl border border-rose-500/20 hover:bg-rose-500/10 text-rose-400 text-sm font-medium transition-all flex items-center justify-center gap-2"
               >
                 <LogOut size={14} />
-                Sair da conta
+                {t('dashboard.account.logout')}
               </button>
             </div>
           </div>
