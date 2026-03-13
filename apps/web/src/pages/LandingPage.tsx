@@ -91,12 +91,12 @@ export default function LandingPage() {
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 mb-20">
-          <button className="px-8 py-4 rounded-xl relative group overflow-hidden font-bold transition-all shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:shadow-[0_0_40px_rgba(16,185,129,0.5)] scale-100 hover:scale-[1.02]">
+          <a href="https://chromewebstore.google.com/detail/leompfpcdanhcmmdinclnfkghaakobha?utm_source=item-share-cb" target="_blank" rel="noopener noreferrer" className="px-8 py-4 rounded-xl relative group overflow-hidden font-bold transition-all shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:shadow-[0_0_40px_rgba(16,185,129,0.5)] scale-100 hover:scale-[1.02]">
             <div className="absolute inset-0 bg-emerald-500" />
             <span className="relative text-slate-900 flex items-center gap-2">
               <Zap size={20} /> {t('landing.hero.install_btn')}
             </span>
-          </button>
+          </a>
           <Link to="/docs" className="px-8 py-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl font-bold flex items-center gap-2 text-slate-100 transition-colors">
             <Cpu size={20} /> {t('landing.hero.docs_btn')}
           </Link>
@@ -159,7 +159,7 @@ export default function LandingPage() {
                   <li className="flex items-center gap-3 text-sm text-slate-300"><CheckCircle2 size={16} className="text-emerald-500"/> {t('landing.pricing.ext_feature_3')}</li>
                 </ul>
               </div>
-              <button className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors">{t('landing.pricing.ext_btn')}</button>
+              <a href="https://chromewebstore.google.com/detail/leompfpcdanhcmmdinclnfkghaakobha?utm_source=item-share-cb" target="_blank" rel="noopener noreferrer" className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors text-center inline-block">{t('landing.pricing.ext_btn')}</a>
             </div>
 
             {/* API SaaS */}
