@@ -11,10 +11,8 @@ const distManifest = resolve(__dirname, '../dist/manifest.json');
 
 const manifest = JSON.parse(readFileSync(distManifest, 'utf8'));
 
-// Firefox requires background.scripts alongside service_worker
-if (manifest.background?.service_worker && !manifest.background.scripts) {
-  manifest.background.scripts = [manifest.background.service_worker];
-}
+// Chrome MV3 does not allow background.scripts (MV2 only)
+if (manifest.background?.scripts) delete manifest.background.scripts;
 
 // Ensure browser_specific_settings is present and correct
 manifest.browser_specific_settings = {

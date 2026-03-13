@@ -11,10 +11,7 @@
   ],
   "background": {
     "service_worker": "service-worker-loader.js",
-    "type": "module",
-    "scripts": [
-      "service-worker-loader.js"
-    ]
+    "type": "module"
   },
   "browser_specific_settings": {
     "gecko": {
@@ -45,7 +42,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/content.ts-loader-la17Q3U5.js"
+        "assets/content.ts-loader-BCgEvAd9.js"
       ],
       "matches": [
         "https://chatgpt.com/*",
@@ -83,7 +80,7 @@
       ],
       "resources": [
         "assets/PithEngine-CZoAM39E.js",
-        "assets/content.ts-BZd4UrJq.js"
+        "assets/content.ts-CQTNIOao.js"
       ],
       "use_dynamic_url": false
     }

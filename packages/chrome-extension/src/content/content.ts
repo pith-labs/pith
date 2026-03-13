@@ -58,115 +58,240 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ═══════════════════════════════════════════════════
-// INTERCEPT: Capture Enter keydown before platform handles it
+// CLAUDE.AI: dedicated finders (React SPA, contenteditable often outside form)
+// ═══════════════════════════════════════════════════
+
+// Same order as claude-token-counter (known to work on claude.ai)
+function getClaudeInput(): HTMLElement | null {
+  const ce = document.querySelector('div[contenteditable="true"][data-testid]') as HTMLElement | null;
+  if (ce) return ce;
+  const fallback = document.querySelector(
+    'div[contenteditable="true"].ProseMirror, ' +
+    'div[contenteditable="true"][class*="composer"], ' +
+    'div[contenteditable="true"][class*="input"], ' +
+    'div[contenteditable="true"][placeholder]'
+  ) as HTMLElement | null;
+  if (fallback) return fallback;
+  return document.querySelector('div[contenteditable="true"]') as HTMLElement | null;
+}
+
+// Token counter uses: button[aria-label*="Send"], button[data-testid*="send"]
+function getClaudeSendButton(): HTMLButtonElement | null {
+  const btn =
+    document.querySelector('button[aria-label*="Send" i], button[aria-label*="Enviar" i]') as HTMLButtonElement | null ||
+    document.querySelector('button[data-testid*="send"]') as HTMLButtonElement | null ||
+    document.querySelector('form button[type="submit"]') as HTMLButtonElement | null;
+  return btn && !btn.disabled ? btn : null;
+}
+
+// ═══════════════════════════════════════════════════
+// CLAUDE.AI: attach to input/button when they appear (React mounts later)
+// Same pattern as claude-token-counter
+// ═══════════════════════════════════════════════════
+
+function runClaudeAttach() {
+  const input = getClaudeInput();
+  const sendBtn = getClaudeSendButton();
+
+  if (input && !(input as any).__pithAttached) {
+    (input as any).__pithAttached = true;
+    input.addEventListener('keydown', (ev: Event) => {
+      if (!pithEnabled) return;
+      const e = ev as KeyboardEvent;
+      if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+      if ((e as any).__lens) return;
+      const text = (input as HTMLElement).innerText?.trim() ?? '';
+      if (!text || text.length < 30 || isCodeHeavy(text)) return;
+      const { output, noiseRemoved, isQuery } = engine.optimize(text);
+      if (noiseRemoved < 5) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const hint = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
+      setContentEditableText(input as HTMLElement, responseBoost ? output + hint : output);
+      if (sessionToken) logUsage(text);
+      const btn = getClaudeSendButton();
+      setTimeout(() => {
+        if (btn && !btn.disabled) {
+          (btn as any).__lens = true;
+          btn.click();
+          setTimeout(() => { (btn as any).__lens = false; }, 100);
+        }
+        showBadge(`-${noiseRemoved}% PITH`, '#10b981');
+      }, 100);
+    }, true);
+  }
+
+  if (sendBtn && !(sendBtn as any).__pithAttached) {
+    (sendBtn as any).__pithAttached = true;
+    sendBtn.addEventListener('click', (ev: Event) => {
+      if (!pithEnabled || (ev as any).__lens || (sendBtn as any).__lens) return;
+      const inp = getClaudeInput();
+      if (!inp) return;
+      const text = inp.innerText?.trim() ?? '';
+      if (!text || text.length < 30 || isCodeHeavy(text)) return;
+      const { output, noiseRemoved, isQuery } = engine.optimize(text);
+      if (noiseRemoved < 5) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const hint = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
+      setContentEditableText(inp, responseBoost ? output + hint : output);
+      if (sessionToken) logUsage(text);
+      setTimeout(() => {
+        (sendBtn as any).__lens = true;
+        sendBtn.click();
+        setTimeout(() => {
+          (sendBtn as any).__lens = false;
+          showBadge(`-${noiseRemoved}% PITH`, '#10b981');
+        }, 150);
+      }, 100);
+    }, true);
+  }
+}
+
+if (window.location.hostname.includes('claude.ai')) {
+  const claudeObserver = new MutationObserver(() => runClaudeAttach());
+  claudeObserver.observe(document.body, { childList: true, subtree: true });
+  runClaudeAttach();
+  // Re-run attach periodically (composer can mount late)
+  let pollCount = 0;
+  const pollId = setInterval(() => {
+    runClaudeAttach();
+    if (++pollCount >= 10) clearInterval(pollId);
+  }, 1500);
+  // Focus fallback: when user focuses the composer, attach to that element
+  document.addEventListener('focusin', (e) => {
+    const el = e.target as HTMLElement;
+    if (el?.isContentEditable && !(el as any).__pithAttached) {
+      (el as any).__pithAttached = true;
+      el.addEventListener('keydown', (ev: Event) => {
+        if (!pithEnabled) return;
+        const ke = ev as KeyboardEvent;
+        if (ke.key !== 'Enter' || ke.shiftKey || ke.ctrlKey || ke.metaKey || ke.altKey) return;
+        if ((ke as any).__lens) return;
+        const text = el.innerText?.trim() ?? '';
+        if (!text || text.length < 30 || isCodeHeavy(text)) return;
+        const { output, noiseRemoved, isQuery } = engine.optimize(text);
+        if (noiseRemoved < 5) return;
+        ke.preventDefault();
+        ke.stopPropagation();
+        setContentEditableText(el, responseBoost ? output + (isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS) : output);
+        if (sessionToken) logUsage(text);
+        const btn = getClaudeSendButton();
+        setTimeout(() => {
+          if (btn && !btn.disabled) {
+            (btn as any).__lens = true;
+            btn.click();
+            setTimeout(() => { (btn as any).__lens = false; }, 100);
+          }
+          showBadge(`-${noiseRemoved}% PITH`, '#10b981');
+        }, 100);
+      }, true);
+    }
+  }, true);
+  // Expose debug in page context so user can run from Console
+  try {
+    const script = document.createElement('script');
+    script.textContent = `(function(){
+      window.__pithDebug = function(){
+        var sel = [
+          'div[contenteditable="true"][data-testid]',
+          'div[contenteditable="true"].ProseMirror',
+          'div[contenteditable="true"]',
+          'button[aria-label*="Send"]',
+          'button[data-testid*="send"]',
+          'form button[type="submit"]'
+        ];
+        var input = document.querySelector(sel[0]) || document.querySelector(sel[1]) || document.querySelector(sel[2]);
+        var btn = document.querySelector(sel[3]) || document.querySelector(sel[4]) || document.querySelector(sel[5]);
+        var out = { input: input ? { tag: input.tagName, testid: input.getAttribute('data-testid'), className: input.className } : null, button: btn ? { tag: btn.tagName, disabled: btn.disabled } : null };
+        console.log('PITH debug', out);
+        return out;
+      };
+    })();`;
+    (document.head || document.documentElement).appendChild(script);
+    script.remove();
+  } catch (_) {}
+}
+
+// ═══════════════════════════════════════════════════
+// INTERCEPT: document keydown — on Claude use activeElement (focused composer)
 // ═══════════════════════════════════════════════════
 
 document.addEventListener('keydown', (e) => {
   if (!pithEnabled) return;
   if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
-
-  // Skip our own synthetic events
   if ((e as any).__lens) return;
 
-  const el = document.activeElement as HTMLElement;
+  const isClaude = window.location.hostname.includes('claude.ai');
+  let el: HTMLElement | null = document.activeElement as HTMLElement;
+  if (isClaude && (!el || !el.isContentEditable)) {
+    el = getClaudeInput();
+  }
   if (!el) return;
-
-  // Only intercept chat inputs (textarea or contenteditable)
   const isTextarea = el.tagName === 'TEXTAREA';
   const isContentEditable = el.isContentEditable;
   if (!isTextarea && !isContentEditable) return;
 
-  // Get current text
-  let text = '';
-  if (isTextarea) {
-    text = (el as HTMLTextAreaElement).value;
-  } else {
-    text = el.innerText;
-  }
-
-  // Skip empty, very short, or code-heavy inputs
-  if (!text.trim() || text.length < 30) return;
+  let text = isTextarea ? (el as HTMLTextAreaElement).value : el.innerText;
+  if (!text?.trim() || text.length < 30) return;
   if (isCodeHeavy(text)) return;
 
-  // Require login
-  if (!sessionToken) {
-    showBadge('PITH: faça login', '#f59e0b');
-    return;
-  }
-
-  // Compress
   const { output, noiseRemoved, isQuery } = engine.optimize(text);
-
-  // Not worth compressing (< 5% reduction)
   if (noiseRemoved < 5) return;
 
-  // Append response boost hint if enabled (contextual per mode)
   const hint = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
   const finalOutput = responseBoost ? output + hint : output;
-
-  // Stop original submit
   e.preventDefault();
   e.stopPropagation();
+  if (isTextarea) setTextareaValue(el as HTMLTextAreaElement, finalOutput);
+  else setContentEditableText(el as HTMLElement, finalOutput);
+  if (sessionToken) logUsage(text);
 
-  // Replace text in the input
-  if (isTextarea) {
-    setTextareaValue(el as HTMLTextAreaElement, finalOutput);
+  if (isClaude) {
+    const btn = getClaudeSendButton();
+    setTimeout(() => {
+      if (btn && !btn.disabled) {
+        (btn as any).__lens = true;
+        btn.click();
+        setTimeout(() => { (btn as any).__lens = false; }, 100);
+      }
+      showBadge(`-${noiseRemoved}% PITH`, '#10b981');
+    }, 100);
   } else {
-    setContentEditableText(el as HTMLElement, finalOutput);
+    requestAnimationFrame(() => {
+      const syntheticEnter = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true });
+      (syntheticEnter as any).__lens = true;
+      el.dispatchEvent(syntheticEnter);
+      el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+      showBadge(`-${noiseRemoved}% PITH`, '#10b981');
+    });
   }
-
-  // Log usage to backend (fire-and-forget)
-  logUsage(text);
-
-  // Wait for framework to process the text change, then re-send
-  requestAnimationFrame(() => {
-    const syntheticEnter = new KeyboardEvent('keydown', {
-      key: 'Enter',
-      code: 'Enter',
-      keyCode: 13,
-      which: 13,
-      bubbles: true,
-      cancelable: true,
-    });
-    (syntheticEnter as any).__lens = true;
-    el.dispatchEvent(syntheticEnter);
-
-    // Also fire keyup for platforms that listen to it
-    const syntheticKeyUp = new KeyboardEvent('keyup', {
-      key: 'Enter',
-      code: 'Enter',
-      keyCode: 13,
-      which: 13,
-      bubbles: true,
-    });
-    (syntheticKeyUp as any).__lens = true;
-    el.dispatchEvent(syntheticKeyUp);
-
-    showBadge(`-${noiseRemoved}% PITH`, '#10b981');
-  });
-
-}, true); // capture phase — runs before platform handlers
-
-// ═══════════════════════════════════════════════════
-// ALSO INTERCEPT: Send button clicks
-// ═══════════════════════════════════════════════════
+}, true);
 
 document.addEventListener('click', (e) => {
-  if (!pithEnabled) return;
-  if ((e as any).__lens) return;
-
+  if (!pithEnabled || (e as any).__lens) return;
   const target = e.target as HTMLElement;
   if (!target) return;
 
-  // Detect send buttons by common patterns
-  const button = target.closest('button[data-testid*="send"], button[aria-label*="Send"], button[aria-label*="Enviar"]');
+  const isClaude = window.location.hostname.includes('claude.ai');
+  const button = target.closest(
+    'button[data-testid*="send"], button[aria-label*="Send"], button[aria-label*="Enviar"], button[type="submit"]'
+  ) as HTMLButtonElement | null;
   if (!button) return;
+  if ((button as any).__lens) return;
+  if (isClaude && getClaudeSendButton() !== button) return;
 
-  // Find the nearest chat input
-  const container = button.closest('form') || button.parentElement?.parentElement?.parentElement;
-  if (!container) return;
-
-  const input = container.querySelector('textarea, [contenteditable="true"]') as HTMLElement;
+  let input: HTMLElement | null;
+  if (isClaude) {
+    input = getClaudeInput();
+  } else {
+    const container = button.closest('form') || button.parentElement?.parentElement?.parentElement;
+    if (!container) return;
+    input = container.querySelector('textarea, [contenteditable="true"], .ProseMirror') as HTMLElement | null;
+    if (!input && container instanceof HTMLFormElement) {
+      input = (container.closest('[data-testid], [role="main"], main') || document.body).querySelector('.ProseMirror, [contenteditable="true"]') as HTMLElement | null;
+    }
+  }
   if (!input) return;
 
   const isTextarea = input.tagName === 'TEXTAREA';
@@ -174,12 +299,6 @@ document.addEventListener('click', (e) => {
 
   if (!text.trim() || text.length < 30) return;
   if (isCodeHeavy(text)) return;
-
-  // Require login
-  if (!sessionToken) {
-    showBadge('PITH: faça login', '#f59e0b');
-    return;
-  }
 
   const { output, noiseRemoved, isQuery } = engine.optimize(text);
   if (noiseRemoved < 5) return;
@@ -195,20 +314,25 @@ document.addEventListener('click', (e) => {
     setContentEditableText(input as HTMLElement, finalOutput);
   }
 
-  // Log usage to backend (fire-and-forget)
-  logUsage(text);
+  if (sessionToken) logUsage(text);
 
-  // Small delay to let the text update propagate, then re-click
   e.preventDefault();
   e.stopPropagation();
 
-  requestAnimationFrame(() => {
-    const syntheticClick = new MouseEvent('click', { bubbles: true, cancelable: true });
-    (syntheticClick as any).__lens = true;
-    button.dispatchEvent(syntheticClick);
-    showBadge(`-${noiseRemoved}% PITH`, '#10b981');
-  });
-
+  if (isClaude) {
+    setTimeout(() => {
+      (button as any).__lens = true;
+      button.click();
+      setTimeout(() => { (button as any).__lens = false; }, 100);
+      showBadge(`-${noiseRemoved}% PITH`, '#10b981');
+    }, 100);
+  } else {
+    requestAnimationFrame(() => {
+      (button as any).__lens = true;
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      showBadge(`-${noiseRemoved}% PITH`, '#10b981');
+    });
+  }
 }, true);
 
 // ═══════════════════════════════════════════════════
@@ -234,6 +358,7 @@ const PROSE_SELECTORS = [
 ];
 
 function findResponseElement(root: Element): HTMLElement | null {
+  if (!root || !(root instanceof Element)) return null;
   // Try finding via assistant container → prose inside it
   for (const outer of ASSISTANT_CONTAINER_SELECTORS) {
     const msg = root.matches(outer) ? root : root.querySelector(outer);
@@ -346,7 +471,7 @@ const responseObserver = new MutationObserver((mutations) => {
     }
 
     // Streaming mutations (text changing inside existing container)
-    if (mutation.type === 'characterData' || mutation.type === 'childList') {
+    if ((mutation.type === 'characterData' || mutation.type === 'childList') && target instanceof Element) {
       const container = findResponseElement(target);
       if (container && !processedResponses.has(container)) {
         scheduleResponseCompression(container);
@@ -382,11 +507,10 @@ function setTextareaValue(textarea: HTMLTextAreaElement, value: string) {
   textarea.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-// Set contenteditable text using execCommand (works with React, undo history)
+// Set contenteditable text: execCommand + input event so ProseMirror/React sync
 function setContentEditableText(el: HTMLElement, text: string) {
   el.focus();
 
-  // Select all content
   const selection = window.getSelection();
   if (!selection) return;
 
@@ -395,8 +519,10 @@ function setContentEditableText(el: HTMLElement, text: string) {
   selection.removeAllRanges();
   selection.addRange(range);
 
-  // Replace using execCommand — integrates with browser undo and React
   document.execCommand('insertText', false, text);
+
+  // ProseMirror/React often don't sync from execCommand alone; dispatch input so they update
+  el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: false, inputType: 'insertText' }));
 }
 
 // ═══════════════════════════════════════════════════
