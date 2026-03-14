@@ -207,29 +207,7 @@ if (window.location.hostname.includes('claude.ai')) {
       }, true);
     }
   }, true);
-  // Expose debug in page context so user can run from Console
-  try {
-    const script = document.createElement('script');
-    script.textContent = `(function(){
-      window.__pithDebug = function(){
-        var sel = [
-          'div[contenteditable="true"][data-testid]',
-          'div[contenteditable="true"].ProseMirror',
-          'div[contenteditable="true"]',
-          'button[aria-label*="Send"]',
-          'button[data-testid*="send"]',
-          'form button[type="submit"]'
-        ];
-        var input = document.querySelector(sel[0]) || document.querySelector(sel[1]) || document.querySelector(sel[2]);
-        var btn = document.querySelector(sel[3]) || document.querySelector(sel[4]) || document.querySelector(sel[5]);
-        var out = { input: input ? { tag: input.tagName, testid: input.getAttribute('data-testid'), className: input.className } : null, button: btn ? { tag: btn.tagName, disabled: btn.disabled } : null };
-        console.log('PITH debug', out);
-        return out;
-      };
-    })();`;
-    (document.head || document.documentElement).appendChild(script);
-    script.remove();
-  } catch (_) {}
+  // No inline script injection (would violate CSP on claude.ai and other strict sites)
 }
 
 // ═══════════════════════════════════════════════════
