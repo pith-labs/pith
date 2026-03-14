@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Copy, TerminalSquare, Zap, Share2, LogOut, Crown, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Copy, TerminalSquare, Zap, Share2, LogOut, Crown, X, Globe } from 'lucide-react';
+import { setLocale } from './i18n';
 import { PithEngine } from '@pith/core';
 import { login, signUp, loadSession, logout as doLogout, type Session } from './lib/auth.js';
 import { api, type BackendStats } from './lib/api.js';
@@ -12,7 +14,32 @@ const ONBOARDING_EXAMPLE = `Olá, tudo bem? Gostaria de pedir um favor. Eu estav
 
 // ── Auth Form (login / cadastro) ──────────────────────────────────────────────
 
+const LANGS = [{ code: 'en', label: 'EN' }, { code: 'pt', label: 'PT' }, { code: 'es', label: 'ES' }, { code: 'fr', label: 'FR' }];
+
+function LanguageSwitcher() {
+  const { i18n } = useTranslation();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen(!open)} className="flex items-center gap-1 text-slate-500 hover:text-slate-300 text-xs font-mono uppercase" title="Language">
+        <Globe size={12} />
+        {i18n.language?.slice(0, 2) || 'EN'}
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-1 py-1 w-24 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50">
+          {LANGS.map((l) => (
+            <button key={l.code} type="button" onClick={() => { setLocale(l.code); setOpen(false); }} className={`block w-full text-left px-3 py-1.5 text-sm ${i18n.language?.startsWith(l.code) ? 'text-emerald-400 bg-slate-700/50' : 'text-slate-300 hover:bg-slate-700'}`}>
+              {l.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AuthForm({ onSuccess, onClose, required }: { onSuccess: (s: Session) => void; onClose: () => void; required?: boolean }) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,7 +72,7 @@ function AuthForm({ onSuccess, onClose, required }: { onSuccess: (s: Session) =>
       <div className="w-full max-w-xs flex flex-col gap-4">
         <div className="flex justify-between items-center">
           <h2 className="text-base font-bold text-slate-100">
-            {mode === 'login' ? 'Entrar no PITH' : 'Criar conta'}
+            {mode === 'login' ? t('auth.login') : t('auth.signup')}
           </h2>
           {!required && (
             <button onClick={onClose} className="text-slate-500 hover:text-slate-300">
@@ -59,7 +86,7 @@ function AuthForm({ onSuccess, onClose, required }: { onSuccess: (s: Session) =>
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
+            placeholder={t('auth.email')}
             required
             className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
           />
@@ -67,7 +94,7 @@ function AuthForm({ onSuccess, onClose, required }: { onSuccess: (s: Session) =>
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Senha"
+            placeholder={t('auth.password')}
             required
             minLength={6}
             className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
@@ -85,7 +112,7 @@ function AuthForm({ onSuccess, onClose, required }: { onSuccess: (s: Session) =>
             disabled={loading}
             className="w-full py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold text-sm transition-all disabled:opacity-50"
           >
-            {loading ? '...' : mode === 'login' ? 'Entrar' : 'Criar conta'}
+            {loading ? '...' : mode === 'login' ? t('auth.submit_login') : t('auth.submit_signup')}
           </button>
         </form>
 
@@ -93,7 +120,7 @@ function AuthForm({ onSuccess, onClose, required }: { onSuccess: (s: Session) =>
           onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(null); setInfo(null); }}
           className="text-xs text-slate-500 hover:text-slate-300 text-center transition-colors"
         >
-          {mode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Entre'}
+          {mode === 'login' ? t('auth.switch_to_signup') : t('auth.switch_to_login')}
         </button>
       </div>
     </div>
@@ -103,6 +130,7 @@ function AuthForm({ onSuccess, onClose, required }: { onSuccess: (s: Session) =>
 // ── Onboarding ────────────────────────────────────────────────────────────────
 
 function OnboardingScreen({ onFinish }: { onFinish: () => void }) {
+  const { t } = useTranslation();
   const [revealed, setRevealed] = useState(false);
   const { output, noiseRemoved } = engine.optimize(ONBOARDING_EXAMPLE);
 
@@ -111,17 +139,20 @@ function OnboardingScreen({ onFinish }: { onFinish: () => void }) {
       <header className="flex items-center gap-2 mb-5 border-b border-slate-800 pb-4">
         <TerminalSquare className="text-emerald-400" />
         <h1 className="text-xl font-bold tracking-tight">PITH</h1>
-        <span className="ml-auto text-xs text-slate-500 font-mono">primeiro uso</span>
+        <span className="ml-auto flex items-center gap-2">
+          <LanguageSwitcher />
+          <span className="text-xs text-slate-500 font-mono">{t('onboarding.title')}</span>
+        </span>
       </header>
 
       <div className="flex-1 flex flex-col gap-4">
         <p className="text-slate-300 text-sm">
-          PITH remove o ruído dos seus prompts antes de enviar para a IA.<br/>
-          <span className="text-slate-500">Veja o que acontece com este prompt:</span>
+          {t('onboarding.intro')}<br/>
+          <span className="text-slate-500">{t('onboarding.see_example')}</span>
         </p>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-mono text-slate-500 uppercase tracking-wider">Original (verboso)</label>
+          <label className="text-xs font-mono text-slate-500 uppercase tracking-wider">{t('onboarding.original')}</label>
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm font-mono text-slate-400 leading-relaxed">
             {ONBOARDING_EXAMPLE}
           </div>
@@ -133,27 +164,27 @@ function OnboardingScreen({ onFinish }: { onFinish: () => void }) {
             className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)]"
           >
             <Zap size={16} className="inline mr-2" />
-            Destilar
+            {t('onboarding.distill')}
           </button>
         ) : (
           <>
             <div className="flex flex-col gap-1">
               <div className="flex justify-between items-center">
-                <label className="text-xs font-mono text-emerald-400 uppercase tracking-wider">PITH (destilado)</label>
-                <span className="text-xs font-mono text-rose-400 font-bold">-{noiseRemoved}% Ruído</span>
+                <label className="text-xs font-mono text-emerald-400 uppercase tracking-wider">{t('onboarding.distilled')}</label>
+                <span className="text-xs font-mono text-rose-400 font-bold">-{noiseRemoved}% {t('onboarding.noise')}</span>
               </div>
               <div className="bg-black border border-emerald-900/50 rounded-xl p-3 text-sm text-emerald-400 font-mono leading-relaxed shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]">
                 {output}
               </div>
             </div>
             <p className="text-xs text-slate-500 text-center">
-              A IA recebe apenas a intenção. Resposta mais direta, menos tokens gastos.
+              {t('onboarding.result')}
             </p>
             <button
               onClick={onFinish}
               className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold transition-all"
             >
-              Entendi — usar PITH
+              {t('onboarding.got_it')}
             </button>
           </>
         )}
@@ -165,6 +196,7 @@ function OnboardingScreen({ onFinish }: { onFinish: () => void }) {
 // ── Main App ──────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const { t } = useTranslation();
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
@@ -287,6 +319,7 @@ export default function App() {
         <div className="flex items-center gap-2">
           <TerminalSquare className="text-emerald-400" />
           <h1 className="text-xl font-bold tracking-tight">PITH v3</h1>
+          <LanguageSwitcher />
           {session && (
             <span className={`flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded-full ${isPro ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-slate-700 text-slate-400'}`}>
               {isPro && <Crown size={10} />}
@@ -299,11 +332,11 @@ export default function App() {
           <div className="flex flex-col items-end gap-0.5 text-sm font-mono">
             <div className="flex items-center gap-2">
               <span className="text-emerald-400 font-bold">{displayTokens.toLocaleString()} tk</span>
-              <button onClick={shareStats} title="Compartilhar estatísticas" className="text-slate-500 hover:text-emerald-400 transition-colors">
-                {shareCopied ? <span className="text-xs text-emerald-400 font-sans font-normal">copiado!</span> : <Share2 size={14} />}
+              <button onClick={shareStats} title={t('main.share_stats')} className="text-slate-500 hover:text-emerald-400 transition-colors">
+                {shareCopied ? <span className="text-xs text-emerald-400 font-sans font-normal">{t('main.copied')}</span> : <Share2 size={14} />}
               </button>
             </div>
-            <span className="text-slate-400 text-xs">${displayDollars.toFixed(2)} saved</span>
+            <span className="text-slate-400 text-xs">${displayDollars.toFixed(2)} {t('main.saved')}</span>
           </div>
 
           {session ? (
@@ -315,16 +348,16 @@ export default function App() {
               onClick={() => setShowAuthForm(true)}
               className="flex items-center gap-1.5 text-xs font-mono px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-colors"
             >
-              Login
+              {t('main.login_btn')}
             </button>
           )}
         </div>
       </header>
 
       {session && !isPro && (
-        <div className="mb-3 flex flex-col gap-1.5">
+          <div className="mb-3 flex flex-col gap-1.5">
           <div className="flex justify-between text-xs font-mono">
-            <span className="text-slate-400">Uso mensal</span>
+            <span className="text-slate-400">{t('main.monthly_usage')}</span>
             <span className={monthlyUsed >= FREE_MONTHLY_LIMIT ? 'text-rose-400 font-bold' : 'text-slate-400'}>
               {monthlyUsed}/{FREE_MONTHLY_LIMIT}
             </span>
@@ -340,12 +373,12 @@ export default function App() {
 
       <div className="flex-1 flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-slate-300">O que você quer perguntar?</label>
+          <label className="text-sm font-semibold text-slate-300">{t('main.what_to_ask')}</label>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             className="w-full h-32 bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm focus:outline-none focus:border-indigo-500 resize-none font-mono text-slate-300"
-            placeholder="Ex: Olá, tudo bem? Queria pedir sua ajuda — você consegue me explicar como implementar autenticação JWT no meu projeto? Seria muito importante para mim, obrigado!"
+            placeholder={t('main.placeholder')}
           />
         </div>
 
@@ -355,11 +388,11 @@ export default function App() {
               PITH
               <span className={`text-xs font-mono text-emerald-400 flex items-center gap-1 transition-opacity duration-300 ${isDistilling ? 'opacity-100 animate-pulse' : 'opacity-0'}`}>
                 <Zap size={14} className="fill-emerald-400" />
-                Destilando...
+                {t('main.distilling')}
               </span>
             </label>
             <div className="flex items-center gap-3">
-              {massaGorda > 0 && <span className="text-xs text-rose-400 font-mono font-bold">-{massaGorda}% Ruído</span>}
+              {massaGorda > 0 && <span className="text-xs text-rose-400 font-mono font-bold">-{massaGorda}% {t('main.noise_label')}</span>}
               {currentSavings > 0 && <span className="text-xs text-emerald-400 font-mono">↓ {currentSavings} tk</span>}
             </div>
           </div>
@@ -374,7 +407,7 @@ export default function App() {
 
       <div className="mt-4 flex flex-col gap-2 border-t border-slate-800 pt-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-slate-300">Modo Invisível (Auto-compress)</span>
+          <span className="text-sm text-slate-300">{t('main.invisible_mode')}</span>
           <button
             onClick={() => { const n = !pithEnabled; setPithEnabled(n); if (typeof chrome !== 'undefined' && chrome.storage?.local) chrome.storage.local.set({ pithEnabled: n }); }}
             className={`w-10 h-5 rounded-full transition-colors relative ${pithEnabled ? 'bg-emerald-500' : 'bg-slate-600'}`}
@@ -383,7 +416,7 @@ export default function App() {
           </button>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-sm text-slate-300">Response Boost (respostas concisas)</span>
+          <span className="text-sm text-slate-300">{t('main.response_boost')}</span>
           <button
             onClick={() => { const n = !responseBoost; setResponseBoost(n); if (typeof chrome !== 'undefined' && chrome.storage?.local) chrome.storage.local.set({ responseBoost: n }); }}
             className={`w-10 h-5 rounded-full transition-colors relative ${responseBoost ? 'bg-emerald-500' : 'bg-slate-600'}`}
@@ -392,7 +425,7 @@ export default function App() {
           </button>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-sm text-slate-300">Output Compress (comprimir respostas)</span>
+          <span className="text-sm text-slate-300">{t('main.output_compress')}</span>
           <button
             onClick={() => { const n = !outputCompress; setOutputCompress(n); if (typeof chrome !== 'undefined' && chrome.storage?.local) chrome.storage.local.set({ outputCompress: n }); }}
             className={`w-10 h-5 rounded-full transition-colors relative ${outputCompress ? 'bg-indigo-500' : 'bg-slate-600'}`}
@@ -406,9 +439,9 @@ export default function App() {
         <button
           onClick={() => navigator.clipboard.writeText("I will communicate using the Zero-G Protocol (2-letter tags). Treat:\n[tk]: Task/Jira\n[an]: Analyze\n[op]: Optimize\n[ex]: Explain\n[sr]: Source Code\n[dn]: Dense Output\n[pf]: Performance\nIgnore syntax errors, focus on technical keywords and logical assignments (: , = , ->). Answer in the most token-efficient way possible.")}
           className="px-4 py-3 rounded-lg flex items-center justify-center gap-2 font-bold transition-all bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
-          title="Copiar Sistema Zero-G Integrado"
+          title={t('main.copy_pith_prompt')}
         >
-          Copy PITH Prompt
+          {t('main.copy_pith_prompt')}
         </button>
         <button
           onClick={copyPrompt}
@@ -416,7 +449,7 @@ export default function App() {
           className={`flex-1 py-3 rounded-lg flex items-center justify-center gap-2 font-bold transition-all ${output ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-900 shadow-[0_0_20px_rgba(16,185,129,0.3)]' : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'}`}
         >
           <Copy size={18} />
-          Copiar e Salvar
+          {t('main.copy_and_save')}
         </button>
       </div>
     </div>

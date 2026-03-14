@@ -2,12 +2,20 @@
 // Patches dist/manifest.json for Firefox MV3 compatibility after crxjs build.
 // crxjs strips background.scripts and browser_specific_settings — this restores them.
 
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, cpSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const distManifest = resolve(__dirname, '../dist/manifest.json');
+const root = resolve(__dirname, '..');
+const distManifest = resolve(root, 'dist/manifest.json');
+const localesSrc = resolve(root, '_locales');
+const localesDest = resolve(root, 'dist/_locales');
+
+if (existsSync(localesSrc)) {
+  cpSync(localesSrc, localesDest, { recursive: true });
+  console.log('✓ _locales copied to dist');
+}
 
 const manifest = JSON.parse(readFileSync(distManifest, 'utf8'));
 

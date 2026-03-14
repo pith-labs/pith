@@ -1,0 +1,11 @@
+{
+  "extName": { "message": "PITH" },
+  "extDescription": { "message": "PITH - Invisible AI Prompt Compressor. Remove noise, save tokens." },
+  "badge_on": { "message": "PITH ON" },
+  "badge_off": { "message": "PITH OFF" },
+  "login_required": { "message": "PITH: sign in required" },
+  "noise_removed": { "message": "-$1% PITH" },
+  "noise_output": { "message": "-$1% output" },
+  "ver_original": { "message": "view original" },
+  "ver_pith": { "message": "view PITH" }
+}

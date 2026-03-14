@@ -42,7 +42,7 @@ var PithEngine = class _PithEngine {
   // MINIMAL CONFIG (domain config, not language data)
   // ═══════════════════════════════════════════════════
   // Intent tags for query symbolic mode (PT, EN, ES, FR, DE)
-  static DEFAULT_INTENT_TAGS = /* @__PURE__ */ new Map([
+  static INTENT_TAGS = /* @__PURE__ */ new Map([
     // PT
     ["como", "ex"],
     ["explicar", "ex"],
@@ -132,7 +132,7 @@ var PithEngine = class _PithEngine {
     ["lernen", "st"]
   ]);
   // Compact abbreviations for long words (PT, EN, ES, FR, DE)
-  static DEFAULT_ABBREV = /* @__PURE__ */ new Map([
+  static ABBREV = /* @__PURE__ */ new Map([
     // PT
     ["categorias", "cats"],
     ["produtos", "prods"],
@@ -237,17 +237,10 @@ var PithEngine = class _PithEngine {
     ["beschreibung", "desc"],
     ["verf\xFCgbar", "avail"]
   ]);
-  // Scoring thresholds (defaults)
-  static DEFAULT_QUERY_THRESHOLD = 6;
-  static DEFAULT_COMPRESS_THRESHOLD = 4;
-  static DEFAULT_MAX_QUERY_NICHES = 4;
-  // Instance config (cloned from defaults, overridable via constructor)
-  intentTags;
-  abbrevMap;
-  queryThreshold;
-  compressThreshold;
-  maxQueryNiches;
-  constraintConfig;
+  // Scoring thresholds
+  static QUERY_THRESHOLD = 6;
+  static COMPRESS_THRESHOLD = 4;
+  static MAX_QUERY_NICHES = 4;
   // Morphological patterns (algorithmic, not word lists)
   // Adjective/determiner suffixes — Latin-derived morphological patterns, never verb roots
   // -ular/-olar/-lear: celular, solar, nuclear, linear, popular, molecular, circular
@@ -256,65 +249,23 @@ var PithEngine = class _PithEngine {
   static ADJECTIVE_SUFFIX = /(?:ário|ária|oso|osa|ivo|iva|ável|ível|inho|inha|ante|ente|udo|uda|ário|ária|ary|ous|ive|able|ible|ful|less|ical|ial|ular|olar|lear|quer|quier|ico|ica)$/i;
   static VERB_INFINITIVE = /[aei]r$/i;
   static VERB_CONJUGATED = /(?:[aei]ndo|[aei]ram|[aei]va[ms]?|[aei]rá|[aei]rão|[aei]sse[ms]?|[aei]mos|[aei]reis)$/i;
-  constructor(config = {}) {
-    const mapFrom = (src, fallback) => src instanceof Map ? new Map(src) : src ? new Map(src) : new Map(fallback);
-    this.intentTags = mapFrom(config.intentTags, _PithEngine.DEFAULT_INTENT_TAGS);
-    this.abbrevMap = mapFrom(config.abbreviations, _PithEngine.DEFAULT_ABBREV);
-    this.queryThreshold = config.queryThreshold ?? _PithEngine.DEFAULT_QUERY_THRESHOLD;
-    this.compressThreshold = config.compressThreshold ?? _PithEngine.DEFAULT_COMPRESS_THRESHOLD;
-    this.maxQueryNiches = config.maxQueryNiches ?? _PithEngine.DEFAULT_MAX_QUERY_NICHES;
-    const constraints = config.constraints ?? {};
-    this.constraintConfig = {
-      codeNoExplanations: constraints.codeNoExplanations ?? true,
-      listAsBulletsOnly: constraints.listAsBulletsOnly ?? true,
-      shortDirectAnswerForShortInputs: constraints.shortDirectAnswerForShortInputs ?? true
-    };
-  }
   // ═══════════════════════════════════════════════════
   // PUBLIC API
   // ═══════════════════════════════════════════════════
-  optimize(text, options) {
+  optimize(text) {
     try {
       if (!text.trim())
         return { output: "[PITH: No meaningful data found]", noiseRemoved: 0, isQuery: false };
-      const mode = options?.forceMode ?? this.detectMode(text);
+      const mode = this.detectMode(text);
       const result = mode === "compress" ? this.compressPipeline(text) : mode === "conversational" ? this.conversationalPipeline(text) : this.queryPipeline(text);
-      const base = { ...result, isQuery: mode !== "compress" };
-      if (options?.debug) {
-        return { ...base, debug: { mode } };
-      }
-      return base;
+      return { ...result, isQuery: mode !== "compress" };
     } catch (error) {
       console.error("Pith Engine Error:", error);
       return { output: text, noiseRemoved: 0, isQuery: false };
     }
   }
   compressCode(code) {
-    const lines = code.split("\n");
-    const cleaned = [];
-    let blankStreak = 0;
-    for (const line of lines) {
-      const trimmedRight = line.replace(/[ \t]+$/g, "");
-      if (!trimmedRight.trim()) {
-        blankStreak += 1;
-        if (blankStreak > 1)
-          continue;
-        cleaned.push("");
-      } else {
-        blankStreak = 0;
-        cleaned.push(trimmedRight);
-      }
-    }
-    return cleaned.join("\n");
-  }
-  compress(text) {
-    return this.compressPipeline(text);
-  }
-  query(text) {
-    return this.queryPipeline(text);
-  }
-  conversational(text) {
-    return this.conversationalPipeline(text);
+    return code;
   }
   // ═══════════════════════════════════════════════════
   // MODE DETECTION (compress | query | conversational)
@@ -398,7 +349,7 @@ var PithEngine = class _PithEngine {
     const patterned = this.patternLayer(preserved);
     const freq = this.buildFreqMap(patterned);
     const totalWords = patterned.split(/\s+/).length;
-    const filtered = this.scoreFilterLines(patterned, freq, totalWords, this.compressThreshold);
+    const filtered = this.scoreFilterLines(patterned, freq, totalWords, _PithEngine.COMPRESS_THRESHOLD);
     const abbreviated = this.abbreviate(filtered);
     const final = this.restoreAndClean(abbreviated, preserveMap);
     if (!final.trim())
@@ -483,7 +434,7 @@ var PithEngine = class _PithEngine {
       if (isSentenceStart)
         negateNext = false;
       const score = this.scoreWord(words[i], freq, totalWords, i === 0, isSentenceStart, isQuestion);
-      if (score >= this.queryThreshold) {
+      if (score >= _PithEngine.QUERY_THRESHOLD) {
         survivors.push({ word: negateNext ? "~" + clean : clean, score, origIdx: i });
         negateNext = false;
       }
@@ -510,14 +461,14 @@ var PithEngine = class _PithEngine {
     const lower = workText.toLowerCase();
     let tag = "";
     for (const aw of actionWords) {
-      const t = this.intentTags.get(aw.toLowerCase());
+      const t = _PithEngine.INTENT_TAGS.get(aw.toLowerCase());
       if (t) {
         tag = `[${t}]`;
         break;
       }
     }
     if (!tag) {
-      for (const [key, val] of this.intentTags.entries()) {
+      for (const [key, val] of _PithEngine.INTENT_TAGS.entries()) {
         if (lower.includes(key)) {
           tag = `[${val}]`;
           break;
@@ -525,7 +476,7 @@ var PithEngine = class _PithEngine {
       }
     }
     if (!action) {
-      for (const [key] of this.intentTags.entries()) {
+      for (const [key] of _PithEngine.INTENT_TAGS.entries()) {
         if (lower.includes(key) && _PithEngine.VERB_INFINITIVE.test(key)) {
           action = "!" + key;
           actionKeys.add(key);
@@ -558,7 +509,7 @@ var PithEngine = class _PithEngine {
         niches.push({ word: "#" + item.word, score: item.score });
       }
     }
-    const topNiches = niches.sort((a, b) => b.score - a.score).slice(0, this.maxQueryNiches).map((n) => n.word);
+    const topNiches = niches.sort((a, b) => b.score - a.score).slice(0, _PithEngine.MAX_QUERY_NICHES).map((n) => n.word);
     const parts = [];
     if (tag)
       parts.push(tag);
@@ -666,7 +617,7 @@ var PithEngine = class _PithEngine {
       else
         niches.push({ word: "#" + item.word, score: item.score });
     }
-    const topNiches = niches.sort((a, b) => b.score - a.score).slice(0, this.maxQueryNiches).map((n) => n.word);
+    const topNiches = niches.sort((a, b) => b.score - a.score).slice(0, _PithEngine.MAX_QUERY_NICHES).map((n) => n.word);
     const parts = [];
     if (stance)
       parts.push(stance);
@@ -693,14 +644,14 @@ var PithEngine = class _PithEngine {
     const constraints = [];
     const lowerOriginal = originalText.toLowerCase();
     const hasTag = (tag) => parts.some((p) => p === tag);
-    if (this.constraintConfig.codeNoExplanations && (hasTag("[fx]") || hasTag("[gen]") || /```/.test(originalText) || /\b(código|code|script|função|function|refactor)\b/.test(lowerOriginal))) {
+    if (hasTag("[fx]") || hasTag("[gen]") || /```/.test(originalText) || /\b(código|code|script|função|function|refactor)\b/.test(lowerOriginal)) {
       constraints.push("!NoExplanations");
     }
-    if (this.constraintConfig.listAsBulletsOnly && /\b(liste|listar|list|lista)\b/.test(lowerOriginal)) {
+    if (/\b(liste|listar|list|lista)\b/.test(lowerOriginal)) {
       constraints.push("!BulletsOnly");
     }
     const origWords = originalText.split(/\s+/).length;
-    if (this.constraintConfig.shortDirectAnswerForShortInputs && origWords < 15 && constraints.length === 0) {
+    if (origWords < 15 && constraints.length === 0) {
       constraints.push("!DirectAnswer");
     }
     if (constraints.length > 0) {
@@ -890,7 +841,7 @@ var PithEngine = class _PithEngine {
   // Abbreviate known long words
   abbreviate(text) {
     return text.replace(/\b[a-zA-ZÀ-ÿ]{7,}\b/g, (word) => {
-      return this.abbrevMap.get(word.toLowerCase()) || word;
+      return _PithEngine.ABBREV.get(word.toLowerCase()) || word;
     });
   }
   // Restore placeholders and clean whitespace
@@ -941,85 +892,82 @@ var PithEngine = class _PithEngine {
 };
 
 // src/extension.ts
+function getTargetRange(editor) {
+  const { selection, document } = editor;
+  if (!selection.isEmpty)
+    return selection;
+  return new vscode.Range(
+    new vscode.Position(0, 0),
+    document.lineCount > 0 ? new vscode.Position(document.lineCount - 1, document.lineAt(document.lineCount - 1).text.length) : new vscode.Position(0, 0)
+  );
+}
+var STATUS_DEFAULT = "$(sparkle) Pith";
+function showBriefStatus(message, statusBar) {
+  statusBar.text = message;
+  statusBar.show();
+  setTimeout(() => {
+    statusBar.text = STATUS_DEFAULT;
+  }, 2500);
+}
 function activate(context) {
-  console.log("====================================");
-  console.log("PITH EXTENSION IS ACTIVATING...");
-  console.log("====================================");
   const engine = new PithEngine();
-  const participant = vscode.chat.createChatParticipant("pith.assistant", async (request, chatContext, response, token) => {
-    const userInput = request.prompt;
-    if (!userInput.trim()) {
-      response.markdown("Por favor, digite algum texto para o Pith otimizar.");
-      return;
-    }
-    let optimizedPrompt = userInput;
-    try {
-      const { output, noiseRemoved } = engine.optimize(userInput);
-      optimizedPrompt = output;
-      response.markdown(`*\u{1F9F9} Pith otimizou seu prompt (removeu ${noiseRemoved}% de ru\xEDdo).*
-
----
-
-`);
-    } catch (error) {
-      console.error("Pith compression failed", error);
-      response.markdown("\u26A0\uFE0F Ocorreu um erro ao otimizar seu prompt com o Pith.\n\n");
-    }
-    try {
-      const [model] = await vscode.lm.selectChatModels({ vendor: "copilot" });
-      if (!model) {
-        response.markdown("\u26A0\uFE0F N\xE3o foi poss\xEDvel encontrar um modelo de linguagem ativo. Certifique-se de que o Copilot ou Antigravity est\xE1 ativado no VS Code.");
-        return;
-      }
-      const messages = [
-        vscode.LanguageModelChatMessage.User(optimizedPrompt)
-      ];
-      const chatResponse = await model.sendRequest(messages, {}, token);
-      for await (const chunk of chatResponse.text) {
-        if (token.isCancellationRequested)
-          break;
-        response.markdown(chunk);
-      }
-    } catch (error) {
-      console.error("Language model request failed", error);
-      response.markdown(`\u26A0\uFE0F Erro ao comunicar com a IA: ${error.message || error}`);
-    }
-  });
-  context.subscriptions.push(participant);
-  const optimizeCommand = vscode.commands.registerCommand("pith.optimize", async () => {
+  const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  context.subscriptions.push(statusBarItem);
+  const runOptimize = async (copyOnly) => {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
-      vscode.window.showErrorMessage("Abra um arquivo e selecione um texto para usar o Pith.");
+      vscode.window.showErrorMessage("Abra um arquivo para usar o Pith.");
       return;
     }
-    const selection = editor.selection;
-    const text = editor.document.getText(selection);
+    const targetRange = getTargetRange(editor);
+    const text = editor.document.getText(targetRange);
     if (!text.trim()) {
-      vscode.window.showWarningMessage("Por favor, selecione algum texto.");
+      vscode.window.showWarningMessage("Selecione texto ou use em um arquivo com conte\xFAdo.");
       return;
     }
     try {
-      vscode.window.showInformationMessage("Pith: Otimizando seu prompt...");
+      const { output, noiseRemoved } = engine.optimize(text);
+      if (copyOnly) {
+        await vscode.env.clipboard.writeText(output);
+        showBriefStatus(`$(check) Pith: copiado (-${noiseRemoved}%)`, statusBarItem);
+      } else {
+        await editor.edit((editBuilder) => editBuilder.replace(targetRange, output));
+        showBriefStatus(`$(check) Pith: otimizado (-${noiseRemoved}%)`, statusBarItem);
+      }
+    } catch (error) {
+      console.error("Pith optimize failed", error);
+      vscode.window.showErrorMessage(`Pith: ${error.message}`);
+    }
+  };
+  const runOptimizeClipboard = async () => {
+    let text;
+    try {
+      text = await vscode.env.clipboard.readText();
+    } catch {
+      vscode.window.showErrorMessage("N\xE3o foi poss\xEDvel ler a \xE1rea de transfer\xEAncia.");
+      return;
+    }
+    if (!text?.trim()) {
+      vscode.window.showWarningMessage("\xC1rea de transfer\xEAncia vazia. Copie o texto do chat primeiro.");
+      return;
+    }
+    try {
       const { output, noiseRemoved } = engine.optimize(text);
       await vscode.env.clipboard.writeText(output);
-      vscode.window.showInformationMessage(
-        `[PITH] Prompt copiado! (${noiseRemoved}% de ru\xEDdo removido)`
-      );
-      const doc = await vscode.workspace.openTextDocument({
-        content: `// Pith Engine Optimizations
-// Noise Removed: ${noiseRemoved}%
-// Prompt copiado automaticamente para sua \xE1rea de transfer\xEAncia!
-
-${output}`,
-        language: "markdown"
-      });
-      await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Beside });
+      showBriefStatus(`$(check) Pith: clipboard (-${noiseRemoved}%) \u2192 Cole no chat`, statusBarItem);
     } catch (error) {
-      console.error("Command Pith optimize failed", error);
-      vscode.window.showErrorMessage(`Erro ao otimizar com o Pith: ${error.message}`);
+      vscode.window.showErrorMessage(`Pith: ${error.message}`);
     }
-  });
-  context.subscriptions.push(optimizeCommand);
+  };
+  context.subscriptions.push(
+    vscode.commands.registerCommand("pith.optimize", () => runOptimize(false)),
+    vscode.commands.registerCommand("pith.optimizeCopy", () => runOptimize(true)),
+    vscode.commands.registerCommand("pith.optimizeClipboard", runOptimizeClipboard)
+  );
+  statusBarItem.text = STATUS_DEFAULT;
+  statusBarItem.tooltip = "Editor: Ctrl+Alt+P. Chat: copie o texto \u2192 Ctrl+Alt+Shift+P \u2192 cole.";
+  statusBarItem.command = "pith.optimize";
+  statusBarItem.show();
 }
 function deactivate() {
 }

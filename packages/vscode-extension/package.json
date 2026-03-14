@@ -17,17 +17,45 @@
     "commands": [
       {
         "command": "pith.optimize",
-        "title": "Pith: Optimize Selected Text"
+        "title": "Pith: Optimize in Editor"
+      },
+      {
+        "command": "pith.optimizeCopy",
+        "title": "Pith: Optimize and Copy to Clipboard"
+      },
+      {
+        "command": "pith.optimizeClipboard",
+        "title": "Pith: Optimize Clipboard (for Chat)"
       }
     ],
-    "chatParticipants": [
+    "keybindings": [
       {
-        "id": "pith.assistant",
-        "name": "pith",
-        "fullName": "Pith Compressor",
-        "description": "Zero-G prompt compressor"
+        "command": "pith.optimize",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+alt+p",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "pith.optimizeClipboard",
+        "key": "ctrl+alt+shift+p",
+        "mac": "cmd+alt+shift+p",
+        "when": "!editorTextFocus"
       }
-    ]
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "pith.optimize",
+          "when": "editorTextFocus",
+          "group": "1_modification"
+        },
+        {
+          "command": "pith.optimizeCopy",
+          "when": "editorTextFocus",
+          "group": "9_cutcopypaste"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

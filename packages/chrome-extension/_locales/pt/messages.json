@@ -1,0 +1,11 @@
+{
+  "extName": { "message": "PITH" },
+  "extDescription": { "message": "PITH - Compressor de prompts para IA. Remova ruído, economize tokens." },
+  "badge_on": { "message": "PITH LIGADO" },
+  "badge_off": { "message": "PITH DESLIGADO" },
+  "login_required": { "message": "PITH: faça login" },
+  "noise_removed": { "message": "-$1% PITH" },
+  "noise_output": { "message": "-$1% saída" },
+  "ver_original": { "message": "ver original" },
+  "ver_pith": { "message": "ver PITH" }
+}

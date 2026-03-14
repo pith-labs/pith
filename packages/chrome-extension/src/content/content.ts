@@ -1,5 +1,24 @@
 import { PithEngine } from '@pith/core';
 
+function t(key: string, subs?: string[]): string {
+  if (typeof chrome !== 'undefined' && chrome.i18n?.getMessage) {
+    const msg = chrome.i18n.getMessage(key, subs);
+    if (msg) return msg;
+  }
+  const fallback: Record<string, string> = {
+    badge_on: 'PITH ON',
+    badge_off: 'PITH OFF',
+    login_required: 'PITH: sign in required',
+    noise_removed: '-$1% PITH',
+    noise_output: '-$1% output',
+    ver_original: 'view original',
+    ver_pith: 'view PITH',
+  };
+  let s = fallback[key] ?? key;
+  if (subs?.length) s = s.replace(/\$1/g, subs[0]);
+  return s;
+}
+
 const engine = new PithEngine();
 let pithEnabled = true;
 let responseBoost = true;
@@ -31,7 +50,7 @@ if (typeof chrome !== 'undefined' && chrome.storage?.local) {
   chrome.storage.onChanged.addListener((changes) => {
     if (changes.pithEnabled) {
       pithEnabled = changes.pithEnabled.newValue !== false;
-      showBadge(pithEnabled ? 'PITH ON' : 'PITH OFF', pithEnabled ? '#10b981' : '#ef4444');
+      showBadge(pithEnabled ? t('badge_on') : t('badge_off'), pithEnabled ? '#10b981' : '#ef4444');
     }
     if (changes.responseBoost) {
       responseBoost = changes.responseBoost.newValue !== false;
@@ -53,7 +72,7 @@ document.addEventListener('keydown', (e) => {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
       chrome.storage.local.set({ pithEnabled });
     }
-    showBadge(pithEnabled ? 'PITH ON' : 'PITH OFF', pithEnabled ? '#10b981' : '#ef4444');
+    showBadge(pithEnabled ? t('badge_on') : t('badge_off'), pithEnabled ? '#10b981' : '#ef4444');
   }
 });
 
@@ -116,7 +135,7 @@ function runClaudeAttach() {
           btn.click();
           setTimeout(() => { (btn as any).__lens = false; }, 100);
         }
-        showBadge(`-${noiseRemoved}% PITH`, '#10b981');
+        showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
       }, 100);
     }, true);
   }
@@ -141,7 +160,7 @@ function runClaudeAttach() {
         sendBtn.click();
         setTimeout(() => {
           (sendBtn as any).__lens = false;
-          showBadge(`-${noiseRemoved}% PITH`, '#10b981');
+          showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
         }, 150);
       }, 100);
     }, true);
@@ -183,7 +202,7 @@ if (window.location.hostname.includes('claude.ai')) {
             btn.click();
             setTimeout(() => { (btn as any).__lens = false; }, 100);
           }
-          showBadge(`-${noiseRemoved}% PITH`, '#10b981');
+          showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
         }, 100);
       }, true);
     }
@@ -255,7 +274,7 @@ document.addEventListener('keydown', (e) => {
         btn.click();
         setTimeout(() => { (btn as any).__lens = false; }, 100);
       }
-      showBadge(`-${noiseRemoved}% PITH`, '#10b981');
+      showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
     }, 100);
   } else {
     requestAnimationFrame(() => {
@@ -263,7 +282,7 @@ document.addEventListener('keydown', (e) => {
       (syntheticEnter as any).__lens = true;
       el.dispatchEvent(syntheticEnter);
       el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-      showBadge(`-${noiseRemoved}% PITH`, '#10b981');
+      showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
     });
   }
 }, true);
@@ -324,13 +343,13 @@ document.addEventListener('click', (e) => {
       (button as any).__lens = true;
       button.click();
       setTimeout(() => { (button as any).__lens = false; }, 100);
-      showBadge(`-${noiseRemoved}% PITH`, '#10b981');
+      showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
     }, 100);
   } else {
     requestAnimationFrame(() => {
       (button as any).__lens = true;
       button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-      showBadge(`-${noiseRemoved}% PITH`, '#10b981');
+      showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
     });
   }
 }, true);
@@ -400,11 +419,11 @@ function compressAIResponse(el: HTMLElement): void {
   header.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;';
 
   const badge = document.createElement('span');
-  badge.textContent = `-${noiseRemoved}% PITH`;
+  badge.textContent = t('noise_removed', [String(noiseRemoved)]);
   badge.style.cssText = 'background:#10b981;color:#0f172a;font-size:11px;font-family:monospace;font-weight:bold;padding:2px 8px;border-radius:4px;';
 
   const toggleBtn = document.createElement('button');
-  toggleBtn.textContent = 'ver original';
+  toggleBtn.textContent = t('ver_original');
   toggleBtn.style.cssText = 'background:transparent;border:none;color:#64748b;font-size:11px;font-family:monospace;cursor:pointer;text-decoration:underline;padding:0;';
 
   // Compressed view
@@ -422,7 +441,7 @@ function compressAIResponse(el: HTMLElement): void {
     showingOriginal = !showingOriginal;
     compressedDiv.style.display = showingOriginal ? 'none' : 'block';
     originalDiv.style.display = showingOriginal ? 'block' : 'none';
-    toggleBtn.textContent = showingOriginal ? 'ver PITH' : 'ver original';
+    toggleBtn.textContent = showingOriginal ? t('ver_pith') : t('ver_original');
   };
 
   header.appendChild(badge);
@@ -434,7 +453,7 @@ function compressAIResponse(el: HTMLElement): void {
   el.innerHTML = '';
   el.appendChild(wrapper);
 
-  showBadge(`-${noiseRemoved}% output`, '#6366f1');
+  showBadge(t('noise_output', [String(noiseRemoved)]), '#6366f1');
 }
 
 function scheduleResponseCompression(el: HTMLElement): void {
