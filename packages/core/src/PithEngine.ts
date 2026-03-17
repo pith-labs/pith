@@ -613,6 +613,17 @@ export class PithEngine {
       if (seen.has(key)) continue;
       seen.add(key);
       if (/\d/.test(item.word)) { attrs.push('?' + item.word); continue; }
+
+      // Possessivos / relações pessoais como atributos (contexto de quem está envolvido)
+      if (/^(meu|minha|meus|minhas|nosso|nossa|nossos|nossas)$/i.test(item.word)) {
+        attrs.push('?' + key);
+        continue;
+      }
+      if (/^(esposa|esposo|marido|filho|filha)$/i.test(item.word)) {
+        attrs.push('?' + key);
+        continue;
+      }
+
       if (PithEngine.ADJECTIVE_SUFFIX.test(key)) { attrs.push('?' + key); continue; }
       if (/^[A-Z]/.test(item.word)) { entities.push('@' + item.word); continue; }
       if (actionKeys.has(key)) continue;
@@ -726,6 +737,7 @@ export class PithEngine {
     if (data.attrs && data.attrs.length) {
       const as = data.attrs
         .map(a => a.replace(/^\?/, ''))
+        .map(a => a.replace(/^(\d+)[a-z]+$/i, '$1'))
         .filter(Boolean)
         .join(',');
       if (as) slots.push(`A=${as}`);
