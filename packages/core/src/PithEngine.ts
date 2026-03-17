@@ -146,6 +146,7 @@ export class PithEngine {
   private static readonly QUERY_THRESHOLD = 6;
   private static readonly COMPRESS_THRESHOLD = 4;
   private static readonly MAX_QUERY_NICHES = 4;
+  private static readonly MAX_PAYLOAD_CHARS = 256;
 
   // Morphological patterns (algorithmic, not word lists)
   // Adjective/determiner suffixes — Latin-derived morphological patterns, never verb roots
@@ -293,14 +294,14 @@ export class PithEngine {
     const abbreviated = this.abbreviate(filtered);
 
     // Layer 5: Restore placeholders & clean whitespace
-    const final = this.restoreAndClean(abbreviated, preserveMap);
+    const final = this.restoreAndClean(abbreviated, preserveMap).trim();
 
-    if (!final.trim()) return { output: text, noiseRemoved: 0 };
+    if (!final) return { output: text, noiseRemoved: 0 };
 
-    // Layer 6: Output Constraints (Economy)
-    const finalOutput = this.constraintLayer(final.trim(), text, []);
+    const flags = this.computeFlags(text, []);
+    const finalOutput = this.buildOpcode('C', { payload: final }, flags);
 
-    const outputWordCount = finalOutput.split(/\s+/).length;
+    const outputWordCount = final.split(/\s+/).length;
     const noise = originalWordCount > 0
       ? Math.max(0, Math.floor(((originalWordCount - outputWordCount) / originalWordCount) * 100))
       : 0;
@@ -500,7 +501,6 @@ export class PithEngine {
       .slice(0, PithEngine.MAX_QUERY_NICHES)
       .map(n => n.word);
 
-    // Assemble: [tag] !action #niche @entity ?attr
     const parts: string[] = [];
     if (tag) parts.push(tag);
     if (action) parts.push(action);
@@ -508,10 +508,16 @@ export class PithEngine {
     for (const e of entities) parts.push(e);
     for (const a of attrs) parts.push(a);
 
-    let finalOutput = parts.join(' ').trim();
-    if (!finalOutput) return { output: text, noiseRemoved: 0 };
+    const flags = this.computeFlags(text, parts);
+    const finalOutput = this.buildOpcode('Q', {
+      tag,
+      action,
+      niches: topNiches,
+      entities,
+      attrs,
+    }, flags);
 
-    finalOutput = this.constraintLayer(finalOutput, text, parts);
+    if (!finalOutput) return { output: text, noiseRemoved: 0 };
 
     const outputWordCount = finalOutput.split(/\s+/).length;
     const noise = originalWordCount > 0
@@ -626,10 +632,17 @@ export class PithEngine {
     for (const e of entities) parts.push(e);
     for (const a of attrs.slice(0, 3)) parts.push(a);
 
-    let finalOutput = parts.join(' ').trim();
-    if (!finalOutput) return { output: text, noiseRemoved: 0 };
+    const flags = this.computeFlags(text, parts);
+    const finalOutput = this.buildOpcode('V', {
+      stance,
+      tag: '',
+      action,
+      niches: topNiches,
+      entities,
+      attrs: attrs.slice(0, 3),
+    }, flags);
 
-    finalOutput = this.constraintLayer(finalOutput, text, parts);
+    if (!finalOutput) return { output: text, noiseRemoved: 0 };
 
     const outputWordCount = finalOutput.split(/\s+/).length;
     const noise = originalWordCount > 0
@@ -643,30 +656,94 @@ export class PithEngine {
   // SHARED LAYERS
   // ═══════════════════════════════════════════════════
 
-  private constraintLayer(finalText: string, originalText: string, parts: string[]): string {
-    const constraints: string[] = [];
+  private computeFlags(originalText: string, parts: string[]): string[] {
+    const flags: string[] = [];
     const lowerOriginal = originalText.toLowerCase();
-
     const hasTag = (tag: string) => parts.some(p => p === tag);
 
     if (hasTag('[fx]') || hasTag('[gen]') || /```/.test(originalText) || /\b(código|code|script|função|function|refactor)\b/.test(lowerOriginal)) {
-        constraints.push('!NoExplanations');
+      flags.push('NE');
     }
 
     if (/\b(liste|listar|list|lista)\b/.test(lowerOriginal)) {
-        constraints.push('!BulletsOnly');
+      flags.push('BL');
     }
 
     const origWords = originalText.split(/\s+/).length;
-    if (origWords < 15 && constraints.length === 0) {
-        constraints.push('!DirectAnswer');
+    if (origWords < 15 && flags.length === 0) {
+      flags.push('DT');
     }
 
-    if (constraints.length > 0) {
-        return finalText + '\n\n' + constraints.join(' ');
+    return flags;
+  }
+
+  private buildOpcode(
+    mode: 'Q' | 'V' | 'C',
+    data: {
+      stance?: string;
+      tag?: string;
+      action?: string;
+      niches?: string[];
+      entities?: string[];
+      attrs?: string[];
+      payload?: string;
+    },
+    flags: string[]
+  ): string {
+    const slots: string[] = [`M=${mode}`];
+
+    if (data.stance) {
+      const s = data.stance.replace(/[\[\]]/g, '');
+      if (s) slots.push(`S=${s}`);
     }
 
-    return finalText;
+    if (data.tag) {
+      const t = data.tag.replace(/[\[\]]/g, '');
+      if (t) slots.push(`TAG=${t}`);
+    }
+
+    if (data.action) {
+      const clean = data.action.replace(/^!/, '');
+      if (clean) slots.push(`ACT=${clean}`);
+    }
+
+    if (data.niches && data.niches.length) {
+      const ns = data.niches
+        .map(n => n.replace(/^#/, ''))
+        .filter(Boolean)
+        .join(',');
+      if (ns) slots.push(`N=${ns}`);
+    }
+
+    if (data.entities && data.entities.length) {
+      const es = data.entities
+        .map(e => e.replace(/^@/, ''))
+        .filter(Boolean)
+        .join(',');
+      if (es) slots.push(`E=${es}`);
+    }
+
+    if (data.attrs && data.attrs.length) {
+      const as = data.attrs
+        .map(a => a.replace(/^\?/, ''))
+        .filter(Boolean)
+        .join(',');
+      if (as) slots.push(`A=${as}`);
+    }
+
+    if (data.payload) {
+      let payload = data.payload.replace(/\s+/g, ' ').trim();
+      if (payload.length > PithEngine.MAX_PAYLOAD_CHARS) {
+        payload = payload.slice(0, PithEngine.MAX_PAYLOAD_CHARS);
+      }
+      if (payload) slots.push(`P=${payload}`);
+    }
+
+    if (flags.length) {
+      slots.push(`F=${flags.join(',')}`);
+    }
+
+    return slots.join(' ');
   }
 
   private humanNoiseLayer(text: string): string {
