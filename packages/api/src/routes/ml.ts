@@ -4,18 +4,8 @@ import { z } from 'zod';
 import crypto from 'node:crypto';
 import { PithEngine } from '@pith/core';
 import { auth } from '../middleware/auth.js';
-import { rateLimit } from '../middleware/rateLimit.js';
 import { db } from '../db/client.js';
 import { encryptMlUtf8, decryptMlUtf8, mlEncryptionConfigured } from '../lib/mlCrypto.js';
-
-const bodySchema = z.object({
-  text: z.string().min(1).max(50_000),
-  output: z.string().min(1).max(25_000),
-  noiseRemoved: z.number().int().min(0).max(100),
-  isQuery: z.boolean(),
-  includeInputForMl: z.boolean().optional(),
-  kind: z.enum(['user_prompt', 'assistant_response']).optional(),
-});
 
 const feedbackSchema = z.object({
   sampleId: z.string().uuid().optional(),
@@ -400,50 +390,6 @@ export async function compileMlConfigJob(opts: { createdBy: string | null; promo
 
   return { config: inserted ?? null, rules, metrics };
 }
-
-// POST /v1/ml/sample — extension / clients: (input, engine output) for future ML + usage_logs
-mlRouter.post('/sample', auth, rateLimit, zValidator('json', bodySchema), async (c) => {
-  const { text, output, noiseRemoved, isQuery, includeInputForMl, kind } = c.req.valid('json');
-  const userId = c.get('userId');
-  const apiKeyId = c.get('apiKeyId');
-
-  const tokensSaved = Math.max(0, Math.floor((text.length - output.length) / 4));
-  const sampleKind = kind ?? 'user_prompt';
-
-  db.from('usage_logs').insert({
-    user_id: userId,
-    api_key_id: apiKeyId || null,
-    tokens_saved: tokensSaved,
-    noise_removed: noiseRemoved,
-    input_length: text.length,
-  }).then();
-
-  try {
-    const result = await insertMlTelemetrySample({
-      userId,
-      apiKeyId: apiKeyId || null,
-      text,
-      output,
-      noiseRemoved,
-      isQuery,
-      sampleKind,
-      includeInputForMl,
-    });
-
-    return c.json({
-      ok: true,
-      recorded: true,
-      learned: result.learned,
-      sampleId: result.id,
-      reason: result.reason,
-      autoScore: result.autoScore,
-      autoVerdict: result.autoVerdict,
-    });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return c.json({ ok: false, error: 'ml_sample_insert_failed', detail: msg }, 500);
-  }
-});
 
 // POST /v1/ml/feedback — explicit reward signal (acerto/erro + correção opcional)
 mlRouter.post('/feedback', auth, zValidator('json', feedbackSchema), async (c) => {

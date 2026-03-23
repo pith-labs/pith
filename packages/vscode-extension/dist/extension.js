@@ -38,31 +38,6 @@ var vscode = __toESM(require("vscode"));
 
 // ../core/src/PithEngine.ts
 var PithEngine = class _PithEngine {
-  onOptimizeResult;
-  constructor(opts) {
-    this.onOptimizeResult = opts?.onOptimizeResult;
-  }
-  emitOptimizeTelemetry(text, result, kind) {
-    if (!this.onOptimizeResult)
-      return;
-    const payload = {
-      text,
-      output: result.output,
-      noiseRemoved: result.noiseRemoved,
-      isQuery: result.isQuery,
-      kind
-    };
-    const run = () => {
-      try {
-        this.onOptimizeResult(payload);
-      } catch {
-      }
-    };
-    if (typeof queueMicrotask === "function")
-      queueMicrotask(run);
-    else
-      void Promise.resolve().then(run);
-  }
   // ═══════════════════════════════════════════════════
   // MINIMAL CONFIG (domain config, not language data)
   // ═══════════════════════════════════════════════════
@@ -278,21 +253,15 @@ var PithEngine = class _PithEngine {
   // ═══════════════════════════════════════════════════
   // PUBLIC API
   // ═══════════════════════════════════════════════════
-  optimize(text, options) {
-    const kind = options?.telemetryKind ?? "user_prompt";
+  optimize(text) {
     try {
       if (!text.trim())
         return { output: "[PITH: No meaningful data found]", noiseRemoved: 0, isQuery: false };
       const mode = this.detectMode(text);
       const result = mode === "compress" ? this.compressPipeline(text) : mode === "conversational" ? this.conversationalPipeline(text) : this.queryPipeline(text);
-      const out = { ...result, isQuery: mode !== "compress" };
-      this.emitOptimizeTelemetry(text, out, kind);
-      return out;
-    } catch (error) {
-      console.error("Pith Engine Error:", error);
-      const out = { output: text, noiseRemoved: 0, isQuery: false };
-      this.emitOptimizeTelemetry(text, out, kind);
-      return out;
+      return { ...result, isQuery: mode !== "compress" };
+    } catch {
+      return { output: text, noiseRemoved: 0, isQuery: false };
     }
   }
   compressCode(code) {
@@ -1241,30 +1210,28 @@ function activate(context) {
   const telemetryApiUrl = String(cfg.get("telemetryApiUrl") || "").trim();
   const telemetryToken = String(cfg.get("telemetryToken") || "").trim();
   const telemetryEnabled = Boolean(cfg.get("telemetryEnabled", false));
-  const engine = new PithEngine({
-    onOptimizeResult: (p) => {
-      if (!telemetryEnabled || !telemetryApiUrl || !telemetryToken)
-        return;
-      if (p.noiseRemoved < 5 || p.text.trim().length < 30)
-        return;
-      void fetch(`${telemetryApiUrl}/v1/ml/sample`, {
+  const engine = new PithEngine();
+  async function optimizeWithPersist(text) {
+    if (!telemetryEnabled || !telemetryApiUrl || !telemetryToken) {
+      return engine.optimize(text);
+    }
+    try {
+      const res = await fetch(`${telemetryApiUrl}/v1/optimize`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${telemetryToken}`
         },
-        body: JSON.stringify({
-          text: p.text,
-          output: p.output,
-          noiseRemoved: p.noiseRemoved,
-          isQuery: p.isQuery,
-          includeInputForMl: false,
-          kind: p.kind
-        })
-      }).catch(() => {
+        body: JSON.stringify({ text })
       });
+      if (!res.ok)
+        return engine.optimize(text);
+      const j = await res.json();
+      return { output: j.output, noiseRemoved: j.noiseRemoved };
+    } catch {
+      return engine.optimize(text);
     }
-  });
+  }
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   context.subscriptions.push(statusBarItem);
   const runOptimize = async (copyOnly) => {
@@ -1280,7 +1247,7 @@ function activate(context) {
       return;
     }
     try {
-      const { output, noiseRemoved } = engine.optimize(text);
+      const { output, noiseRemoved } = await optimizeWithPersist(text);
       if (copyOnly) {
         await vscode.env.clipboard.writeText(output);
         showBriefStatus(`$(check) Pith: copiado (-${noiseRemoved}%)`, statusBarItem);
@@ -1289,7 +1256,6 @@ function activate(context) {
         showBriefStatus(`$(check) Pith: otimizado (-${noiseRemoved}%)`, statusBarItem);
       }
     } catch (error) {
-      console.error("Pith optimize failed", error);
       vscode.window.showErrorMessage(`Pith: ${error.message}`);
     }
   };
@@ -1306,7 +1272,7 @@ function activate(context) {
       return;
     }
     try {
-      const { output, noiseRemoved } = engine.optimize(text);
+      const { output, noiseRemoved } = await optimizeWithPersist(text);
       await vscode.env.clipboard.writeText(output);
       showBriefStatus(`$(check) Pith: clipboard (-${noiseRemoved}%) \u2192 Cole no chat`, statusBarItem);
     } catch (error) {

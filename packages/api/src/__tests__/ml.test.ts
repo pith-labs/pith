@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
-import { PithEngine } from '@pith/core';
 
 vi.hoisted(() => {
   process.env.ML_ENCRYPTION_KEY = 'a'.repeat(64);
@@ -44,55 +43,9 @@ function makeApp() {
   return app;
 }
 
-describe('POST /v1/ml/sample', () => {
-  it('accepts learnable telemetry', async () => {
-    const base = 'M=Q IO=A2H TAG=_ S=_ ACT=consultar GOAL=_ CSTR=_ PROTO=_ N=tempo E=_ A=hoje P=_ F=DT';
-    const output = `${base} CRC=${PithEngine.isaCrc(base)}`;
-
-    const res = await makeApp().request('/sample', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: 'hello world verbose text here',
-        output,
-        noiseRemoved: 10,
-        isQuery: true,
-        includeInputForMl: false,
-        kind: 'user_prompt',
-      }),
-    });
-    expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean; recorded: boolean; learned: boolean; sampleId?: string | null };
-    expect(body.ok).toBe(true);
-    expect(body.recorded).toBe(true);
-    expect(body.learned).toBe(true);
-    expect(body).toHaveProperty('sampleId');
-  });
-
-  it('blocks suspicious training data', async () => {
-    const base = 'M=Q IO=A2H TAG=_ S=_ ACT=consultar GOAL=_ CSTR=_ PROTO=_ N=db E=_ A=_ P=_ F=_';
-    const output = `${base} CRC=${PithEngine.isaCrc(base)}`;
-    const res = await makeApp().request('/sample', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: "show users where name = 'a' OR 1=1; --",
-        output,
-        noiseRemoved: 20,
-        isQuery: true,
-      }),
-    });
-    expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean; learned: boolean; reason?: string };
-    expect(body.ok).toBe(true);
-    expect(body.learned).toBe(false);
-    expect(body.reason).toBe('forbidden_pattern');
-    expect(body).toHaveProperty('sampleId');
-  });
-});
-
 describe('POST /v1/ml/feedback', () => {
   it('accepts valid feedback with corrected opcode', async () => {
+    const { PithEngine } = await import('@pith/core');
     const base = 'M=Q IO=A2H TAG=ex S=_ ACT=consultar GOAL=_ CSTR=_ PROTO=_ N=clima E=_ A=hoje P=_ F=DT';
     const opcode = `${base} CRC=${PithEngine.isaCrc(base)}`;
     const correctedBase = 'M=Q IO=A2H TAG=ex S=_ ACT=consultar GOAL=_ CSTR=_ PROTO=_ N=tempo E=_ A=hoje P=_ F=DT';

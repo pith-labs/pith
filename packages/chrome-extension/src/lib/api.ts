@@ -34,6 +34,13 @@ export interface UserProfile {
   apiKeyName: string | null;
 }
 
+export type OptimizeResponse = {
+  output: string;
+  noiseRemoved: number;
+  tokensSaved: number;
+  isQuery: boolean;
+};
+
 export const api = {
   // Fetch lifetime stats from backend
   stats: (token: string) =>
@@ -50,4 +57,16 @@ export const api = {
       body: JSON.stringify({ tokensSaved }),
     }),
 
+  optimize: (
+    token: string,
+    payload: {
+      text: string;
+      sampleKind?: 'user_prompt' | 'assistant_response';
+      includeInputForMl?: boolean;
+    }
+  ) =>
+    request<OptimizeResponse>('/v1/optimize', token, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 };

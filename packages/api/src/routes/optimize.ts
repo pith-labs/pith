@@ -78,13 +78,15 @@ async function getActiveRuntimeRules() {
 
 const schema = z.object({
   text: z.string().min(1).max(50_000),
+  sampleKind: z.enum(['user_prompt', 'assistant_response']).optional(),
+  includeInputForMl: z.boolean().optional(),
 });
 
 export const optimizeRouter = new Hono();
 
 // POST /v1/optimize  — authenticated + rate limited
 optimizeRouter.post('/', auth, rateLimit, zValidator('json', schema), async (c) => {
-  const { text } = c.req.valid('json');
+  const { text, sampleKind, includeInputForMl } = c.req.valid('json');
   const userId   = c.get('userId');
   const apiKeyId = c.get('apiKeyId');
 
@@ -109,8 +111,9 @@ optimizeRouter.post('/', auth, rateLimit, zValidator('json', schema), async (c) 
     output,
     noiseRemoved,
     isQuery,
-    sampleKind: 'user_prompt',
+    sampleKind: sampleKind ?? 'user_prompt',
     source: 'api',
+    includeInputForMl: includeInputForMl ?? false,
   }).catch(() => {});
 
   return c.json({ output: outputAdjusted, noiseRemoved, tokensSaved, isQuery });

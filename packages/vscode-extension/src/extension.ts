@@ -28,27 +28,29 @@ export function activate(context: vscode.ExtensionContext) {
   const telemetryToken = String(cfg.get('telemetryToken') || '').trim();
   const telemetryEnabled = Boolean(cfg.get('telemetryEnabled', false));
 
-  const engine = new PithEngine({
-    onOptimizeResult: (p) => {
-      if (!telemetryEnabled || !telemetryApiUrl || !telemetryToken) return;
-      if (!p.text.trim()) return;
-      void fetch(`${telemetryApiUrl}/v1/ml/sample`, {
+  const engine = new PithEngine();
+
+  async function optimizeWithPersist(text: string): Promise<{ output: string; noiseRemoved: number }> {
+    if (!telemetryEnabled || !telemetryApiUrl || !telemetryToken) {
+      return engine.optimize(text);
+    }
+    try {
+      const res = await fetch(`${telemetryApiUrl}/v1/optimize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${telemetryToken}`,
         },
-        body: JSON.stringify({
-          text: p.text,
-          output: p.output,
-          noiseRemoved: p.noiseRemoved,
-          isQuery: p.isQuery,
-          includeInputForMl: false,
-          kind: p.kind,
-        }),
-      }).catch(() => {});
-    },
-  });
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) return engine.optimize(text);
+      const j = (await res.json()) as { output: string; noiseRemoved: number };
+      return { output: j.output, noiseRemoved: j.noiseRemoved };
+    } catch {
+      return engine.optimize(text);
+    }
+  }
+
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   context.subscriptions.push(statusBarItem);
 
@@ -67,7 +69,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     try {
-      const { output, noiseRemoved } = engine.optimize(text);
+      const { output, noiseRemoved } = await optimizeWithPersist(text);
       if (copyOnly) {
         await vscode.env.clipboard.writeText(output);
         showBriefStatus(`$(check) Pith: copiado (-${noiseRemoved}%)`, statusBarItem);
@@ -93,7 +95,7 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
     try {
-      const { output, noiseRemoved } = engine.optimize(text);
+      const { output, noiseRemoved } = await optimizeWithPersist(text);
       await vscode.env.clipboard.writeText(output);
       showBriefStatus(`$(check) Pith: clipboard (-${noiseRemoved}%) → Cole no chat`, statusBarItem);
     } catch (error: any) {

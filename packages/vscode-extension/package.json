@@ -20,7 +20,7 @@
         "pith.telemetryEnabled": {
           "type": "boolean",
           "default": false,
-          "description": "Enable async ML telemetry to /v1/ml/sample."
+          "description": "Use POST /v1/optimize (persists ml_samples on server) instead of local-only engine."
         },
         "pith.telemetryApiUrl": {
           "type": "string",

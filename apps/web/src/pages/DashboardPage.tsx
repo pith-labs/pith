@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 import AuthModal from '../components/AuthModal';
@@ -11,6 +11,7 @@ import { PithEngine } from '@pith/core';
 import { useTranslation } from 'react-i18next';
 
 const FREE_MONTHLY_LIMIT = 100;
+const engine = new PithEngine();
 
 export default function DashboardPage() {
   const { t } = useTranslation();
@@ -28,29 +29,6 @@ export default function DashboardPage() {
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [massaGorda, setMassaGorda] = useState(0);
-  const engine = useMemo(
-    () =>
-      new PithEngine({
-        onOptimizeResult: (p) => {
-          if (!API_URL) return;
-          if (!p.text.trim()) return;
-          if (!session?.accessToken) return;
-          void fetch(`${API_URL}/v1/ml/sample`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
-            body: JSON.stringify({
-              text: p.text,
-              output: p.output,
-              noiseRemoved: p.noiseRemoved,
-              isQuery: p.isQuery,
-              includeInputForMl: false,
-              kind: p.kind,
-            }),
-          }).catch(() => {});
-        },
-      }),
-    [session?.accessToken]
-  );
 
   const isPro = session?.tier === 'pro';
   const monthlyUsed = stats?.monthlyCompressions ?? 0;
@@ -65,9 +43,23 @@ export default function DashboardPage() {
 
   const handleDistill = () => {
     if (!input.trim()) return;
-    const { output: opt, noiseRemoved } = engine.optimize(input);
-    setOutput(opt);
-    setMassaGorda(noiseRemoved);
+    void (async () => {
+      try {
+        if (session?.accessToken && API_URL) {
+          const data = await api.optimize(session.accessToken, { text: input });
+          setOutput(data.output);
+          setMassaGorda(data.noiseRemoved);
+        } else {
+          const { output: opt, noiseRemoved } = engine.optimize(input);
+          setOutput(opt);
+          setMassaGorda(noiseRemoved);
+        }
+      } catch {
+        const { output: opt, noiseRemoved } = engine.optimize(input);
+        setOutput(opt);
+        setMassaGorda(noiseRemoved);
+      }
+    })();
   };
 
   const handleShare = () => {

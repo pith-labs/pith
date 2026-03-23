@@ -34,6 +34,13 @@ export interface UserProfile {
   apiKeyName:  string | null;
 }
 
+export type OptimizeResponse = {
+  output: string;
+  noiseRemoved: number;
+  tokensSaved: number;
+  isQuery: boolean;
+};
+
 export const api = {
   stats:     (token: string) => request<BackendStats>('/v1/stats', token),
   user:      (token: string) => request<UserProfile>('/v1/user', token),
@@ -43,5 +50,18 @@ export const api = {
     request<{ synced: boolean }>('/v1/user/sync', token, {
       method: 'PATCH',
       body: JSON.stringify({ tokensSaved }),
+    }),
+
+  optimize: (
+    token: string,
+    payload: {
+      text: string;
+      sampleKind?: 'user_prompt' | 'assistant_response';
+      includeInputForMl?: boolean;
+    }
+  ) =>
+    request<OptimizeResponse>('/v1/optimize', token, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     }),
 };

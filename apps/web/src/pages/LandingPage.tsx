@@ -4,28 +4,9 @@ import { TerminalSquare, Zap, Target, Cpu, CheckCircle2 } from 'lucide-react';
 import { PithEngine } from '@pith/core';
 import { useTranslation } from 'react-i18next';
 import { loadSession } from '../lib/auth';
-import { API_URL } from '../lib/api';
+import { API_URL, api } from '../lib/api';
 
-const engine = new PithEngine({
-  onOptimizeResult: (p) => {
-    if (!API_URL) return;
-    if (!p.text.trim()) return;
-    const s = loadSession();
-    if (!s?.accessToken) return;
-    void fetch(`${API_URL}/v1/ml/sample`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${s.accessToken}` },
-      body: JSON.stringify({
-        text: p.text,
-        output: p.output,
-        noiseRemoved: p.noiseRemoved,
-        isQuery: p.isQuery,
-        includeInputForMl: false,
-        kind: p.kind,
-      }),
-    }).catch(() => {});
-  },
-});
+const engine = new PithEngine();
 
 // ── Interactive Demo ─────────────────────────────────────────────────────────
 function InteractiveDemo() {
@@ -39,8 +20,26 @@ function InteractiveDemo() {
     if (!input.trim()) { setOutput(''); setMassaGorda(0); setIsDistilling(false); return; }
     setIsDistilling(true);
     const id = setTimeout(() => {
-      const { output: opt, noiseRemoved } = engine.optimize(input);
-      setOutput(opt); setMassaGorda(noiseRemoved); setIsDistilling(false);
+      void (async () => {
+        try {
+          const s = loadSession();
+          if (s?.accessToken && API_URL) {
+            const data = await api.optimize(s.accessToken, { text: input });
+            setOutput(data.output);
+            setMassaGorda(data.noiseRemoved);
+          } else {
+            const { output: opt, noiseRemoved } = engine.optimize(input);
+            setOutput(opt);
+            setMassaGorda(noiseRemoved);
+          }
+        } catch {
+          const { output: opt, noiseRemoved } = engine.optimize(input);
+          setOutput(opt);
+          setMassaGorda(noiseRemoved);
+        } finally {
+          setIsDistilling(false);
+        }
+      })();
     }, 300);
     return () => clearTimeout(id);
   }, [input]);

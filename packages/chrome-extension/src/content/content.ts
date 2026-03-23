@@ -26,58 +26,48 @@ let sessionToken: string | null = null;
 
 const API_URL = import.meta.env.VITE_API_URL as string;
 
-type LogMeta = {
-  output: string;
-  noiseRemoved: number;
-  isQuery: boolean;
-  kind?: 'user_prompt' | 'assistant_response';
-};
+type OptResult = { output: string; noiseRemoved: number; isQuery: boolean };
 
-// Telemetry + ML (async via PithEngine microtask → não bloqueia compressão)
-function logUsage(originalText: string, meta: LogMeta) {
-  if (!API_URL) return;
-  if (!sessionToken) return;
-  const send = (includeInputForMl: boolean) => {
-    fetch(`${API_URL}/v1/ml/sample`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
-      body: JSON.stringify({
-        text: originalText,
-        output: meta.output,
-        noiseRemoved: meta.noiseRemoved,
-        isQuery: meta.isQuery,
-        includeInputForMl,
-        kind: meta.kind ?? 'user_prompt',
-      }),
-    })
-      .then(async (res) => {
-        if (res.status === 401) {
-          sessionToken = null;
-          chrome.storage.local.remove('pithSession');
-        }
-      })
-      .catch(() => {});
-  };
-  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-    chrome.storage.local.get(['pithMlIncludeInput'], (r) => {
-      send(r.pithMlIncludeInput === true);
-    });
-  } else {
-    send(false);
-  }
+function getIncludeInputForMl(): Promise<boolean> {
+  if (typeof chrome === 'undefined' || !chrome.storage?.local) return Promise.resolve(false);
+  return new Promise((r) => {
+    chrome.storage.local.get(['pithMlIncludeInput'], (o) => r(o.pithMlIncludeInput === true));
+  });
 }
 
-const engine = new PithEngine({
-  onOptimizeResult: (p) => {
-    if (!p.text.trim()) return;
-    logUsage(p.text, {
-      output: p.output,
-      noiseRemoved: p.noiseRemoved,
-      isQuery: p.isQuery,
-      kind: p.kind,
+/** Persistência em ml_samples só no servidor: POST /v1/optimize (usa output do engine no backend). */
+async function preferServerOutput(
+  text: string,
+  local: OptResult,
+  sampleKind: 'user_prompt' | 'assistant_response'
+): Promise<OptResult> {
+  if (!sessionToken || !API_URL) return local;
+  const includeInputForMl = await getIncludeInputForMl();
+  try {
+    const res = await fetch(`${API_URL}/v1/optimize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sessionToken}`,
+      },
+      body: JSON.stringify({ text, sampleKind, includeInputForMl }),
     });
-  },
-});
+    if (res.status === 401) {
+      sessionToken = null;
+      void chrome.storage.local.remove('pithSession');
+      return local;
+    }
+    if (res.ok) {
+      const j = (await res.json()) as OptResult;
+      return { output: j.output, noiseRemoved: j.noiseRemoved, isQuery: j.isQuery };
+    }
+  } catch {
+    /* rede */
+  }
+  return local;
+}
+
+const engine = new PithEngine();
 
 // Load session token
 if (typeof chrome !== 'undefined' && chrome.storage?.local) {
@@ -178,21 +168,24 @@ function runClaudeAttach() {
       if ((e as any).__lens) return;
       const text = (input as HTMLElement).innerText?.trim() ?? '';
       if (!text || text.length < 30 || isCodeHeavy(text)) return;
-      const { output, noiseRemoved, isQuery } = engine.optimize(text);
-      if (noiseRemoved < 5) return;
+      const local = engine.optimize(text);
+      if (local.noiseRemoved < 5) return;
       e.preventDefault();
       e.stopPropagation();
-      const hint = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
-      setContentEditableText(input as HTMLElement, responseBoost ? output + hint : output);
-      const btn = getClaudeSendButton();
-      setTimeout(() => {
-        if (btn && !btn.disabled) {
-          (btn as any).__lens = true;
-          btn.click();
-          setTimeout(() => { (btn as any).__lens = false; }, 100);
-        }
-        showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
-      }, 100);
+      void (async () => {
+        const { output, noiseRemoved, isQuery } = await preferServerOutput(text, local, 'user_prompt');
+        const hint = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
+        setContentEditableText(input as HTMLElement, responseBoost ? output + hint : output);
+        const btn = getClaudeSendButton();
+        setTimeout(() => {
+          if (btn && !btn.disabled) {
+            (btn as any).__lens = true;
+            btn.click();
+            setTimeout(() => { (btn as any).__lens = false; }, 100);
+          }
+          showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
+        }, 100);
+      })();
     }, true);
   }
 
@@ -204,20 +197,23 @@ function runClaudeAttach() {
       if (!inp) return;
       const text = inp.innerText?.trim() ?? '';
       if (!text || text.length < 30 || isCodeHeavy(text)) return;
-      const { output, noiseRemoved, isQuery } = engine.optimize(text);
-      if (noiseRemoved < 5) return;
+      const local = engine.optimize(text);
+      if (local.noiseRemoved < 5) return;
       ev.preventDefault();
       ev.stopPropagation();
-      const hint = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
-      setContentEditableText(inp, responseBoost ? output + hint : output);
-      setTimeout(() => {
-        (sendBtn as any).__lens = true;
-        sendBtn.click();
+      void (async () => {
+        const { output, noiseRemoved, isQuery } = await preferServerOutput(text, local, 'user_prompt');
+        const hint = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
+        setContentEditableText(inp, responseBoost ? output + hint : output);
         setTimeout(() => {
-          (sendBtn as any).__lens = false;
-          showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
-        }, 150);
-      }, 100);
+          (sendBtn as any).__lens = true;
+          sendBtn.click();
+          setTimeout(() => {
+            (sendBtn as any).__lens = false;
+            showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
+          }, 150);
+        }, 100);
+      })();
     }, true);
   }
 }
@@ -244,20 +240,23 @@ if (window.location.hostname.includes('claude.ai')) {
         if ((ke as any).__lens) return;
         const text = el.innerText?.trim() ?? '';
         if (!text || text.length < 30 || isCodeHeavy(text)) return;
-        const { output, noiseRemoved, isQuery } = engine.optimize(text);
-        if (noiseRemoved < 5) return;
+        const local = engine.optimize(text);
+        if (local.noiseRemoved < 5) return;
         ke.preventDefault();
         ke.stopPropagation();
-        setContentEditableText(el, responseBoost ? output + (isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS) : output);
-        const btn = getClaudeSendButton();
-        setTimeout(() => {
-          if (btn && !btn.disabled) {
-            (btn as any).__lens = true;
-            btn.click();
-            setTimeout(() => { (btn as any).__lens = false; }, 100);
-          }
-          showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
-        }, 100);
+        void (async () => {
+          const { output, noiseRemoved, isQuery } = await preferServerOutput(text, local, 'user_prompt');
+          setContentEditableText(el, responseBoost ? output + (isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS) : output);
+          const btn = getClaudeSendButton();
+          setTimeout(() => {
+            if (btn && !btn.disabled) {
+              (btn as any).__lens = true;
+              btn.click();
+              setTimeout(() => { (btn as any).__lens = false; }, 100);
+            }
+            showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
+          }, 100);
+        })();
       }, true);
     }
   }, true);
@@ -287,35 +286,38 @@ document.addEventListener('keydown', (e) => {
   if (!text?.trim() || text.length < 30) return;
   if (isCodeHeavy(text)) return;
 
-  const { output, noiseRemoved, isQuery } = engine.optimize(text);
-  if (noiseRemoved < 5) return;
+  const local = engine.optimize(text);
+  if (local.noiseRemoved < 5) return;
 
-  const hint = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
-  const finalOutput = responseBoost ? output + hint : output;
   e.preventDefault();
   e.stopPropagation();
-  if (isTextarea) setTextareaValue(el as HTMLTextAreaElement, finalOutput);
-  else setContentEditableText(el as HTMLElement, finalOutput);
+  void (async () => {
+    const { output, noiseRemoved, isQuery } = await preferServerOutput(text, local, 'user_prompt');
+    const hint = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
+    const finalOutput = responseBoost ? output + hint : output;
+    if (isTextarea) setTextareaValue(el as HTMLTextAreaElement, finalOutput);
+    else setContentEditableText(el as HTMLElement, finalOutput);
 
-  if (isClaude) {
-    const btn = getClaudeSendButton();
-    setTimeout(() => {
-      if (btn && !btn.disabled) {
-        (btn as any).__lens = true;
-        btn.click();
-        setTimeout(() => { (btn as any).__lens = false; }, 100);
-      }
-      showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
-    }, 100);
-  } else {
-    requestAnimationFrame(() => {
-      const syntheticEnter = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true });
-      (syntheticEnter as any).__lens = true;
-      el.dispatchEvent(syntheticEnter);
-      el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-      showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
-    });
-  }
+    if (isClaude) {
+      const btn = getClaudeSendButton();
+      setTimeout(() => {
+        if (btn && !btn.disabled) {
+          (btn as any).__lens = true;
+          btn.click();
+          setTimeout(() => { (btn as any).__lens = false; }, 100);
+        }
+        showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
+      }, 100);
+    } else {
+      requestAnimationFrame(() => {
+        const syntheticEnter = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true });
+        (syntheticEnter as any).__lens = true;
+        el.dispatchEvent(syntheticEnter);
+        el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+        showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
+      });
+    }
+  })();
 }, true);
 
 document.addEventListener('click', (e) => {
@@ -350,37 +352,38 @@ document.addEventListener('click', (e) => {
   if (!text.trim() || text.length < 30) return;
   if (isCodeHeavy(text)) return;
 
-  const { output, noiseRemoved, isQuery } = engine.optimize(text);
-  if (noiseRemoved < 5) return;
-
-  // Append response boost hint if enabled (contextual per mode)
-  const hint2 = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
-  const finalOutput = responseBoost ? output + hint2 : output;
-
-  // Replace text (don't block the click — just change content before it sends)
-  if (isTextarea) {
-    setTextareaValue(input as HTMLTextAreaElement, finalOutput);
-  } else {
-    setContentEditableText(input as HTMLElement, finalOutput);
-  }
+  const local = engine.optimize(text);
+  if (local.noiseRemoved < 5) return;
 
   e.preventDefault();
   e.stopPropagation();
 
-  if (isClaude) {
-    setTimeout(() => {
-      (button as any).__lens = true;
-      button.click();
-      setTimeout(() => { (button as any).__lens = false; }, 100);
-      showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
-    }, 100);
-  } else {
-    requestAnimationFrame(() => {
-      (button as any).__lens = true;
-      button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-      showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
-    });
-  }
+  void (async () => {
+    const { output, noiseRemoved, isQuery } = await preferServerOutput(text, local, 'user_prompt');
+    const hint2 = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
+    const finalOutput = responseBoost ? output + hint2 : output;
+
+    if (isTextarea) {
+      setTextareaValue(input as HTMLTextAreaElement, finalOutput);
+    } else {
+      setContentEditableText(input as HTMLElement, finalOutput);
+    }
+
+    if (isClaude) {
+      setTimeout(() => {
+        (button as any).__lens = true;
+        button.click();
+        setTimeout(() => { (button as any).__lens = false; }, 100);
+        showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
+      }, 100);
+    } else {
+      requestAnimationFrame(() => {
+        (button as any).__lens = true;
+        button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        showBadge(t('noise_removed', [String(noiseRemoved)]), '#10b981');
+      });
+    }
+  })();
 }, true);
 
 // ═══════════════════════════════════════════════════
@@ -431,57 +434,61 @@ function compressAIResponse(el: HTMLElement): void {
   if (!text || text.length < 150) return;
   if (isCodeHeavy(text)) return;
 
-  const { output, noiseRemoved } = engine.optimize(text, { telemetryKind: 'assistant_response' });
-  if (noiseRemoved < 10) return;
+  const local = engine.optimize(text);
+  if (local.noiseRemoved < 10) return;
 
   processedResponses.add(el);
 
-  const originalHTML = el.innerHTML;
+  void (async () => {
+    const { output, noiseRemoved } = await preferServerOutput(text, local, 'assistant_response');
+    if (noiseRemoved < 10) {
+      processedResponses.delete(el);
+      return;
+    }
 
-  // Wrapper
-  const wrapper = document.createElement('div');
-  wrapper.setAttribute('data-pith-output', 'true');
+    const originalHTML = el.innerHTML;
 
-  // Header row: badge + toggle
-  const header = document.createElement('div');
-  header.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;';
+    const wrapper = document.createElement('div');
+    wrapper.setAttribute('data-pith-output', 'true');
 
-  const badge = document.createElement('span');
-  badge.textContent = t('noise_removed', [String(noiseRemoved)]);
-  badge.style.cssText = 'background:#10b981;color:#0f172a;font-size:11px;font-family:monospace;font-weight:bold;padding:2px 8px;border-radius:4px;';
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;';
 
-  const toggleBtn = document.createElement('button');
-  toggleBtn.textContent = t('ver_original');
-  toggleBtn.style.cssText = 'background:transparent;border:none;color:#64748b;font-size:11px;font-family:monospace;cursor:pointer;text-decoration:underline;padding:0;';
+    const badge = document.createElement('span');
+    badge.textContent = t('noise_removed', [String(noiseRemoved)]);
+    badge.style.cssText = 'background:#10b981;color:#0f172a;font-size:11px;font-family:monospace;font-weight:bold;padding:2px 8px;border-radius:4px;';
 
-  // Compressed view
-  const compressedDiv = document.createElement('div');
-  compressedDiv.style.cssText = 'font-family:"SF Mono","Fira Code",monospace;font-size:13px;color:#10b981;line-height:1.6;white-space:pre-wrap;';
-  compressedDiv.textContent = output;
+    const toggleBtn = document.createElement('button');
+    toggleBtn.textContent = t('ver_original');
+    toggleBtn.style.cssText = 'background:transparent;border:none;color:#64748b;font-size:11px;font-family:monospace;cursor:pointer;text-decoration:underline;padding:0;';
 
-  // Original view (hidden by default)
-  const originalDiv = document.createElement('div');
-  originalDiv.innerHTML = originalHTML;
-  originalDiv.style.display = 'none';
+    const compressedDiv = document.createElement('div');
+    compressedDiv.style.cssText = 'font-family:"SF Mono","Fira Code",monospace;font-size:13px;color:#10b981;line-height:1.6;white-space:pre-wrap;';
+    compressedDiv.textContent = output;
 
-  let showingOriginal = false;
-  toggleBtn.onclick = () => {
-    showingOriginal = !showingOriginal;
-    compressedDiv.style.display = showingOriginal ? 'none' : 'block';
-    originalDiv.style.display = showingOriginal ? 'block' : 'none';
-    toggleBtn.textContent = showingOriginal ? t('ver_pith') : t('ver_original');
-  };
+    const originalDiv = document.createElement('div');
+    originalDiv.innerHTML = originalHTML;
+    originalDiv.style.display = 'none';
 
-  header.appendChild(badge);
-  header.appendChild(toggleBtn);
-  wrapper.appendChild(header);
-  wrapper.appendChild(compressedDiv);
-  wrapper.appendChild(originalDiv);
+    let showingOriginal = false;
+    toggleBtn.onclick = () => {
+      showingOriginal = !showingOriginal;
+      compressedDiv.style.display = showingOriginal ? 'none' : 'block';
+      originalDiv.style.display = showingOriginal ? 'block' : 'none';
+      toggleBtn.textContent = showingOriginal ? t('ver_pith') : t('ver_original');
+    };
 
-  el.innerHTML = '';
-  el.appendChild(wrapper);
+    header.appendChild(badge);
+    header.appendChild(toggleBtn);
+    wrapper.appendChild(header);
+    wrapper.appendChild(compressedDiv);
+    wrapper.appendChild(originalDiv);
 
-  showBadge(t('noise_output', [String(noiseRemoved)]), '#6366f1');
+    el.innerHTML = '';
+    el.appendChild(wrapper);
+
+    showBadge(t('noise_output', [String(noiseRemoved)]), '#6366f1');
+  })();
 }
 
 function scheduleResponseCompression(el: HTMLElement): void {

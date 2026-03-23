@@ -6,27 +6,7 @@ import { PithEngine } from '@pith/core';
 import { login, signUp, loadSession, logout as doLogout, type Session } from './lib/auth.js';
 import { api, API_URL, type BackendStats } from './lib/api.js';
 
-const engine = new PithEngine({
-  onOptimizeResult: (p) => {
-    if (!API_URL) return;
-    if (!p.text.trim()) return;
-    void loadSession().then((session) => {
-      if (!session?.accessToken) return;
-      return fetch(`${API_URL}/v1/ml/sample`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
-        body: JSON.stringify({
-          text: p.text,
-          output: p.output,
-          noiseRemoved: p.noiseRemoved,
-          isQuery: p.isQuery,
-          includeInputForMl: false,
-          kind: p.kind,
-        }),
-      }).catch(() => {});
-    }).catch(() => {});
-  },
-});
+const engine = new PithEngine();
 
 const FREE_MONTHLY_LIMIT = 100;
 
@@ -292,11 +272,34 @@ export default function App() {
     if (!input.trim()) { setOutput(''); setMassaGorda(0); setIsDistilling(false); return; }
     setIsDistilling(true);
     const id = setTimeout(() => {
-      const { output: opt, noiseRemoved } = engine.optimize(input);
-      setOutput(opt); setMassaGorda(noiseRemoved); setIsDistilling(false);
+      void (async () => {
+        try {
+          if (session?.accessToken && API_URL) {
+            let includeInputForMl = false;
+            if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+              includeInputForMl = await new Promise<boolean>((r) => {
+                chrome.storage.local.get(['pithMlIncludeInput'], (o) => r(o.pithMlIncludeInput === true));
+              });
+            }
+            const data = await api.optimize(session.accessToken, { text: input, includeInputForMl });
+            setOutput(data.output);
+            setMassaGorda(data.noiseRemoved);
+          } else {
+            const { output: opt, noiseRemoved } = engine.optimize(input);
+            setOutput(opt);
+            setMassaGorda(noiseRemoved);
+          }
+        } catch {
+          const { output: opt, noiseRemoved } = engine.optimize(input);
+          setOutput(opt);
+          setMassaGorda(noiseRemoved);
+        } finally {
+          setIsDistilling(false);
+        }
+      })();
     }, 300);
     return () => clearTimeout(id);
-  }, [input]);
+  }, [input, session?.accessToken]);
 
   const calculateEconomy = (a: string, b: string) => Math.max(0, Math.floor((a.length - b.length) / 4));
 
