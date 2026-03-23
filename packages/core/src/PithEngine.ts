@@ -889,7 +889,10 @@ export class PithEngine {
     else if (hasIn && hasOut) nextAction = '![define|protocol]';
     else if (hasIn) nextAction = '!define_asm_in';
     else if (hasOut) nextAction = '!define_human_out';
-    else nextAction = '!spec_product';
+    else if (spec.goal.includes('ASM_IA')) {
+      const bare = action.replace(/^!/, '').trim();
+      nextAction = bare.length ? action : '!assembly_ia';
+    } else nextAction = '!spec_product';
 
     const filtered = topNiches
       .map(n => n.replace(/^#/, ''))
