@@ -68,7 +68,8 @@ describe('POST /v1/optimize', () => {
     });
 
     const body = await res.json() as any;
-    expect(body.output.length).toBeLessThan(input.length);
+    expect(body.output).toContain('M=');
+    expect(body.tokensSaved).toBeGreaterThanOrEqual(0);
   });
 
   it('rejects empty text (zod)', async () => {

@@ -34,11 +34,11 @@ if (typeof chrome !== 'undefined' && chrome.storage?.local) {
   });
 }
 
-// ISA v2 reply line (CRC matches @pith/core PithEngine.isaCrc)
+// ISA v2 reply line (without CRC for outbound LLM prompt)
 function isaReplyHint(f: string): string {
   const base =
     'M=R IO=A2H TAG=_ S=_ ACT=respond GOAL=_ CSTR=_ PROTO=_ N=_ E=_ A=_ P=_ F=' + f;
-  return `\n${base} CRC=${PithEngine.isaCrc(base)}`;
+  return `\n${base}`;
 }
 const RESPONSE_HINT_QUERY = isaReplyHint('NE,DT');
 const RESPONSE_HINT_COMPRESS = isaReplyHint('NE,BL,DT');
@@ -132,7 +132,7 @@ function runClaudeAttach() {
       e.stopPropagation();
       const hint = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
       setContentEditableText(input as HTMLElement, responseBoost ? output + hint : output);
-      if (sessionToken) logUsage(text);
+      if (sessionToken) logUsage(text, { output, noiseRemoved, isQuery });
       const btn = getClaudeSendButton();
       setTimeout(() => {
         if (btn && !btn.disabled) {
@@ -159,7 +159,7 @@ function runClaudeAttach() {
       ev.stopPropagation();
       const hint = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
       setContentEditableText(inp, responseBoost ? output + hint : output);
-      if (sessionToken) logUsage(text);
+      if (sessionToken) logUsage(text, { output, noiseRemoved, isQuery });
       setTimeout(() => {
         (sendBtn as any).__lens = true;
         sendBtn.click();
@@ -199,7 +199,7 @@ if (window.location.hostname.includes('claude.ai')) {
         ke.preventDefault();
         ke.stopPropagation();
         setContentEditableText(el, responseBoost ? output + (isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS) : output);
-        if (sessionToken) logUsage(text);
+        if (sessionToken) logUsage(text, { output, noiseRemoved, isQuery });
         const btn = getClaudeSendButton();
         setTimeout(() => {
           if (btn && !btn.disabled) {
@@ -247,7 +247,7 @@ document.addEventListener('keydown', (e) => {
   e.stopPropagation();
   if (isTextarea) setTextareaValue(el as HTMLTextAreaElement, finalOutput);
   else setContentEditableText(el as HTMLElement, finalOutput);
-  if (sessionToken) logUsage(text);
+  if (sessionToken) logUsage(text, { output, noiseRemoved, isQuery });
 
   if (isClaude) {
     const btn = getClaudeSendButton();
@@ -316,7 +316,7 @@ document.addEventListener('click', (e) => {
     setContentEditableText(input as HTMLElement, finalOutput);
   }
 
-  if (sessionToken) logUsage(text);
+  if (sessionToken) logUsage(text, { output, noiseRemoved, isQuery });
 
   e.preventDefault();
   e.stopPropagation();
@@ -385,13 +385,13 @@ function compressAIResponse(el: HTMLElement): void {
   if (!text || text.length < 150) return;
   if (isCodeHeavy(text)) return;
 
-  const { output, noiseRemoved } = engine.optimize(text);
+  const { output, noiseRemoved, isQuery } = engine.optimize(text);
   if (noiseRemoved < 10) return;
 
   processedResponses.add(el);
 
   const originalHTML = el.innerHTML;
-  logUsage(text);
+  logUsage(text, { output, noiseRemoved, isQuery, kind: 'assistant_response' });
 
   // Wrapper
   const wrapper = document.createElement('div');
@@ -546,26 +546,51 @@ function isCodeHeavy(text: string): boolean {
   return codeLines / lines.length > 0.5;
 }
 
-// Log usage to backend (fire-and-forget)
-function logUsage(originalText: string) {
+type LogMeta = {
+  output: string;
+  noiseRemoved: number;
+  isQuery: boolean;
+  kind?: 'user_prompt' | 'assistant_response';
+};
+
+// Telemetry + ML dataset (hash always; plaintext only if pithMlIncludeInput)
+function logUsage(originalText: string, meta: LogMeta) {
   if (!API_URL) return;
   if (!sessionToken) {
     console.warn('[PITH] logUsage skipped: no session token');
     return;
   }
-  fetch(`${API_URL}/v1/optimize`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
-    body: JSON.stringify({ text: originalText }),
-  }).then(async (res) => {
-    if (res.status === 401) {
-      console.warn('[PITH] token expired — clearing session');
-      sessionToken = null;
-      chrome.storage.local.remove('pithSession');
-    }
-  }).catch((err) => {
-    console.warn('[PITH] logUsage error:', err);
-  });
+  const send = (includeInputForMl: boolean) => {
+    fetch(`${API_URL}/v1/ml/sample`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify({
+        text: originalText,
+        output: meta.output,
+        noiseRemoved: meta.noiseRemoved,
+        isQuery: meta.isQuery,
+        includeInputForMl,
+        kind: meta.kind ?? 'user_prompt',
+      }),
+    })
+      .then(async (res) => {
+        if (res.status === 401) {
+          console.warn('[PITH] token expired — clearing session');
+          sessionToken = null;
+          chrome.storage.local.remove('pithSession');
+        }
+      })
+      .catch((err) => {
+        console.warn('[PITH] logUsage error:', err);
+      });
+  };
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    chrome.storage.local.get(['pithMlIncludeInput'], (r) => {
+      send(r.pithMlIncludeInput === true);
+    });
+  } else {
+    send(false);
+  }
 }
 
 // Show a transient badge notification

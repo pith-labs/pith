@@ -6,6 +6,7 @@ import { optimizeRouter } from './routes/optimize.js';
 import { statsRouter } from './routes/stats.js';
 import { userRouter } from './routes/user.js';
 import { licenseRouter } from './routes/license.js';
+import { mlRouter } from './routes/ml.js';
 
 const app = new Hono();
 
@@ -24,6 +25,7 @@ app.route('/v1/optimize', optimizeRouter);
 app.route('/v1/stats',    statsRouter);
 app.route('/v1/user',     userRouter);
 app.route('/v1/license',  licenseRouter);
+app.route('/v1/ml',       mlRouter);
 
 // 404
 app.notFound((c) => c.json({ error: 'Not found' }, 404));

@@ -502,26 +502,19 @@ export class PithEngine {
       .map(n => n.word);
 
     const spec = this.extractProductSpec(text);
-    const lowerNorm = text
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
+    const lowerNorm = this.isaNorm(text);
     let { action: actionOut, niches: nichesOut } = this.applySpecToQuery(spec, action, topNiches, lowerNorm);
-
-    // Query fallback: avoid empty ACT/N for short factual asks (e.g. "como está o clima hoje?")
-    if (!actionOut && tag === '[ex]') {
-      actionOut = '!consultar';
-    }
-    if (!nichesOut.length && /\bclima\b/i.test(lowerNorm)) {
-      nichesOut = ['#clima'];
-    }
+    const patched = this.patchGenericQueryInterpretation(lowerNorm, tag, actionOut, nichesOut, [...attrs]);
+    actionOut = patched.action;
+    nichesOut = patched.niches;
+    const attrsFinal = patched.attrs;
 
     const parts: string[] = [];
     if (tag) parts.push(tag);
     if (actionOut) parts.push(actionOut);
     for (const n of nichesOut) parts.push(n);
     for (const e of entities) parts.push(e);
-    for (const a of attrs) parts.push(a);
+    for (const a of attrsFinal) parts.push(a);
 
     const flags = this.computeFlags(text, parts);
     const finalOutput = this.buildOpcode('Q', {
@@ -532,7 +525,7 @@ export class PithEngine {
       proto: spec.proto,
       niches: nichesOut,
       entities,
-      attrs,
+      attrs: attrsFinal,
     }, flags);
 
     if (!finalOutput) return { output: text, noiseRemoved: 0 };
@@ -655,10 +648,7 @@ export class PithEngine {
       .map(n => n.word);
 
     const spec = this.extractProductSpec(text);
-    const lowerNorm = text
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
+    const lowerNorm = this.isaNorm(text);
     const { action: actionOut, niches: nichesOut } = this.applySpecToQuery(spec, action, topNiches, lowerNorm);
 
     const parts: string[] = [];
@@ -706,14 +696,30 @@ export class PithEngine {
     return hex.padStart(8, '0').slice(-8);
   }
 
-  /** Product / protocol intent: GOAL, CSTR, PROTO (assembly I/O, human-only output, etc.) */
-  private extractProductSpec(raw: string): { goal: string; cstr: string; proto: string } {
-    const EMPTY = '_';
-    const n = raw
+  private isaNorm(raw: string): string {
+    return raw
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '');
+  }
 
+  private mergeIsaSpecParts(
+    chunks: Array<{ goal: string[]; cstr: string[]; proto: string[] }>
+  ): { goal: string; cstr: string; proto: string } {
+    const EMPTY = '_';
+    const goal = [...new Set(chunks.flatMap(c => c.goal))].join('+') || EMPTY;
+    const cstr = [...new Set(chunks.flatMap(c => c.cstr))].join('|') || EMPTY;
+    const proto = [...new Set(chunks.flatMap(c => c.proto))].join('|') || EMPTY;
+    if (goal === EMPTY && cstr === EMPTY && proto === EMPTY) {
+      return { goal: EMPTY, cstr: EMPTY, proto: EMPTY };
+    }
+    return { goal, cstr, proto };
+  }
+
+  private detectAssemblyIsaSpec(n: string): { goal: string[]; cstr: string[]; proto: string[] } {
+    const goal: string[] = [];
+    const cstr: string[] = [];
+    const proto: string[] = [];
     const hasAssembly = /\bassembly\b/.test(n);
     const hasIa = /\b(ia|ai|llm)\b/.test(n);
     const humanOut =
@@ -727,56 +733,133 @@ export class PithEngine {
       (/\b(apenas|somente|only)\s+(o\s+)?assembly\b/.test(n) && /receber|receive|input|entrada/.test(n)) ||
       (hasAssembly && /\b(apenas|somente|only)\b/.test(n) && /\b(receber|receive|entrada|input)\b/.test(n));
 
-    // Strong autonomy/ML triggers (opt-in only):
-    // require at least one "learning/autonomy" term + one "self-evolution" intent term.
+    if (hasAssembly && hasIa) goal.push('ASM_IA');
+    if (humanOut) goal.push('HUMAN_OUT');
+    if (asmIn) goal.push('ASM_IN');
+    if (asmIn || (hasAssembly && /\b(apenas|somente|only)\b/.test(n) && /\b(receber|receive)\b/.test(n))) {
+      cstr.push('IN_ASM_ONLY');
+    }
+    if (humanOut) cstr.push('OUT_HUMAN_ONLY');
+    if (asmIn || cstr.includes('IN_ASM_ONLY')) proto.push('IN=ASM');
+    if (humanOut || cstr.includes('OUT_HUMAN_ONLY')) proto.push('OUT=HUMAN');
+    return { goal, cstr, proto };
+  }
+
+  private detectLearnIsaSpec(n: string): { goal: string[]; cstr: string[]; proto: string[] } {
+    const goal: string[] = [];
+    const cstr: string[] = [];
+    const proto: string[] = [];
+
     const hasMlCore =
       /\b(aprendizado de maquina|machine learning|ml)\b/.test(n) ||
       (/\b(aprendizado|learning)\b/.test(n) && /\b(maquina|machine)\b/.test(n));
     const hasAutonomyIntent =
-      /\b(evoluir sozinho|evolua sozinho|sozinho)\b/.test(n) ||
-      /\b(autonomo|autonomous|self[-\s]?improve|self[-\s]?learning)\b/.test(n);
-    const hasStrongLearnSpec = hasMlCore && hasAutonomyIntent;
+      /\b(evoluir sozinho|evolua sozinho)\b/.test(n) ||
+      /\b(autonomo|autonomous|self[-\s]?improve|self[-\s]?learning)\b/.test(n) ||
+      (/\b(sozinho|sozinha|automatico|automaticamente)\b/.test(n) &&
+        /\b(evoluir|evolui|evolua|melhorar|consertar|corrigir)\b/.test(n));
+    const hasEngineContext =
+      /\b(algoritmo|motor|engine|modelo|sistema|pith)\b/.test(n);
+    const hasSelfHeal =
+      /\b(se\s+consert|auto[-\s]?corrig|self[-\s]?heal|auto[-\s]?melhor)\b/.test(n);
 
-    // Robust prompt spec (opt-in): generic prompt + reliability coverage
+    const strongPair = hasMlCore && hasAutonomyIntent;
+    const engineEvolves = hasEngineContext && hasAutonomyIntent && (hasMlCore || hasSelfHeal);
+
+    if (strongPair || engineEvolves) {
+      goal.push('SELF_IMPROVE');
+      cstr.push('SAFE_AUTONOMY');
+      proto.push('LEARN=ON');
+      proto.push('UPDATE=CONTROLLED');
+    }
+    return { goal, cstr, proto };
+  }
+
+  private detectPromptIsaSpec(n: string): { goal: string[]; cstr: string[]; proto: string[] } {
+    const goal: string[] = [];
+    const cstr: string[] = [];
+    const proto: string[] = [];
     const hasPromptCore =
       /\b(prompt|prompts)\b/.test(n) ||
       /\b(comando|instrucao|instrucoes)\b/.test(n);
     const hasGenericCoverage =
       /\b(generico|gen[eé]rico|qualquer|any|todos os casos|all cases)\b/.test(n) &&
       /\b(funcione|funcionar|robusto|robust|consistente|consistent)\b/.test(n);
-    const hasStrongPromptSpec = hasPromptCore && hasGenericCoverage;
-
-    const goalParts: string[] = [];
-    if (hasAssembly && hasIa) goalParts.push('ASM_IA');
-    if (humanOut) goalParts.push('HUMAN_OUT');
-    if (asmIn) goalParts.push('ASM_IN');
-    if (hasStrongLearnSpec) goalParts.push('SELF_IMPROVE');
-    if (hasStrongPromptSpec) goalParts.push('ROBUST_PROMPT');
-
-    const cstrParts: string[] = [];
-    if (asmIn || (hasAssembly && /\b(apenas|somente|only)\b/.test(n) && /\b(receber|receive)\b/.test(n))) {
-      cstrParts.push('IN_ASM_ONLY');
+    if (hasPromptCore && hasGenericCoverage) {
+      goal.push('ROBUST_PROMPT');
+      cstr.push('GENERIC_COVERAGE');
+      proto.push('INPUT=ANY');
+      proto.push('OUTPUT=CONSISTENT');
     }
-    if (humanOut) cstrParts.push('OUT_HUMAN_ONLY');
-    if (hasStrongLearnSpec) cstrParts.push('SAFE_AUTONOMY');
-    if (hasStrongPromptSpec) cstrParts.push('GENERIC_COVERAGE');
-
-    const protoParts: string[] = [];
-    if (asmIn || cstrParts.includes('IN_ASM_ONLY')) protoParts.push('IN=ASM');
-    if (humanOut || cstrParts.includes('OUT_HUMAN_ONLY')) protoParts.push('OUT=HUMAN');
-    if (hasStrongLearnSpec) protoParts.push('LEARN=ON');
-    if (hasStrongLearnSpec) protoParts.push('UPDATE=CONTROLLED');
-    if (hasStrongPromptSpec) protoParts.push('INPUT=ANY');
-    if (hasStrongPromptSpec) protoParts.push('OUTPUT=CONSISTENT');
-
-    const goal = [...new Set(goalParts)].join('+') || EMPTY;
-    const cstr = [...new Set(cstrParts)].join('|') || EMPTY;
-    const proto = [...new Set(protoParts)].join('|') || EMPTY;
-
-    const meaningful =
-      goal !== EMPTY || cstr !== EMPTY || proto !== EMPTY;
-    if (!meaningful) return { goal: EMPTY, cstr: EMPTY, proto: EMPTY };
     return { goal, cstr, proto };
+  }
+
+  /** Product / protocol intent: merged detectores opt-in (assembly, learn, prompt). */
+  private extractProductSpec(raw: string): { goal: string; cstr: string; proto: string } {
+    const n = this.isaNorm(raw);
+    return this.mergeIsaSpecParts([
+      this.detectAssemblyIsaSpec(n),
+      this.detectLearnIsaSpec(n),
+      this.detectPromptIsaSpec(n),
+    ]);
+  }
+
+  /** Preenche ACT/N/A de forma genérica quando o scoring deixou slots vazios demais. */
+  private patchGenericQueryInterpretation(
+    lowerNorm: string,
+    tag: string,
+    actionOut: string,
+    nichesOut: string[],
+    attrs: string[]
+  ): { action: string; niches: string[]; attrs: string[] } {
+    const action = actionOut || '';
+    let niches = [...nichesOut];
+    const attrsOut = [...attrs];
+
+    const tagVal = tag.replace(/[\[\]]/g, '');
+    const isExplanatory = tagVal === 'ex';
+    const isQuestion =
+      /\?/.test(lowerNorm) ||
+      /^(como|qual|quais|quem|onde|quando|por que|porque|o que|what|how|why|when|where)\b/.test(lowerNorm);
+
+    let nextAction = action;
+    if (isExplanatory && !nextAction.replace(/^!/, '')) {
+      nextAction = '!consultar';
+    }
+
+    const hasNiche = (w: string) => niches.some(n => n.replace(/^#/, '').toLowerCase() === w);
+    const pushNiche = (w: string) => {
+      if (!hasNiche(w)) niches.push('#' + w);
+    };
+
+    if (!niches.length) {
+      if (/\btempo\b/.test(lowerNorm)) pushNiche('tempo');
+      else if (/\bclima\b/.test(lowerNorm)) pushNiche('clima');
+      else if (/\bweather\b/.test(lowerNorm)) pushNiche('weather');
+    }
+
+    if (!niches.length && (isExplanatory || isQuestion)) {
+      const m = lowerNorm.match(
+        /\b(?:como\s+(?:esta|está|ta|e)|qual\s+(?:e|é|seria)|o\s+que\s+(?:e|é))\s+(?:o\s+|a\s+)?([a-zà-öø-ÿ]{3,})\b/
+      );
+      if (m) {
+        const w = m[1];
+        const stop = new Set([
+          'esta', 'está', 'esse', 'essa', 'isso', 'aquilo', 'coisa', 'situa', 'situacao',
+        ]);
+        if (!stop.has(w)) pushNiche(w);
+      }
+    }
+
+    const pushAttr = (w: string) => {
+      const key = w.toLowerCase();
+      if (!attrsOut.some(a => a.replace(/^\?/, '').toLowerCase() === key)) attrsOut.push('?' + key);
+    };
+    if (/\bhoje\b|today\b/.test(lowerNorm)) pushAttr('hoje');
+    if (/\bagora\b|now\b/.test(lowerNorm)) pushAttr('agora');
+    if (/\b(amanha|amanhã|tomorrow)\b/.test(lowerNorm)) pushAttr('amanha');
+
+    return { action: nextAction, niches, attrs: attrsOut };
   }
 
   private static readonly SPEC_NICHE_STOP = new Set([
@@ -929,9 +1012,7 @@ export class PithEngine {
       `F=${flagsOut || EMPTY}`,
     ];
 
-    const base = ordered.join(' ');
-    const crc = PithEngine.isaCrc(base);
-    return `${base} CRC=${crc}`;
+    return ordered.join(' ');
   }
 
   private humanNoiseLayer(text: string): string {
