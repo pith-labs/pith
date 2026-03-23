@@ -43,7 +43,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/content.ts-loader-D0CgO7N0.js"
+        "assets/content.ts-loader-D2OZds9W.js"
       ],
       "matches": [
         "https://chatgpt.com/*",
@@ -80,8 +80,8 @@
         "https://you.com/*"
       ],
       "resources": [
-        "assets/PithEngine-C_p06D-O.js",
-        "assets/content.ts-BN6qp1N1.js"
+        "assets/PithEngine-gmro_pcG.js",
+        "assets/content.ts-DvE4UizH.js"
       ],
       "use_dynamic_url": false
     }

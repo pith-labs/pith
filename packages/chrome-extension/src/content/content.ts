@@ -34,9 +34,14 @@ if (typeof chrome !== 'undefined' && chrome.storage?.local) {
   });
 }
 
-// Concise response instructions — ~15 tokens that save hundreds on output
-const RESPONSE_HINT_QUERY = '\n[Answer in 1-3 sentences. No intro/outro. No "Great question". Skip what I already know.]';
-const RESPONSE_HINT_COMPRESS = '\n[Be concise. No filler. No recap of my input. Direct answer only. Bullets over paragraphs.]';
+// ISA v2 reply line (CRC matches @pith/core PithEngine.isaCrc)
+function isaReplyHint(f: string): string {
+  const base =
+    'M=R IO=A2H TAG=_ S=_ ACT=respond GOAL=_ CSTR=_ PROTO=_ N=_ E=_ A=_ P=_ F=' + f;
+  return `\n${base} CRC=${PithEngine.isaCrc(base)}`;
+}
+const RESPONSE_HINT_QUERY = isaReplyHint('NE,DT');
+const RESPONSE_HINT_COMPRESS = isaReplyHint('NE,BL,DT');
 
 // Load saved state
 if (typeof chrome !== 'undefined' && chrome.storage?.local) {

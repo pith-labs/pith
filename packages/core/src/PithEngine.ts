@@ -501,18 +501,36 @@ export class PithEngine {
       .slice(0, PithEngine.MAX_QUERY_NICHES)
       .map(n => n.word);
 
+    const spec = this.extractProductSpec(text);
+    const lowerNorm = text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    let { action: actionOut, niches: nichesOut } = this.applySpecToQuery(spec, action, topNiches, lowerNorm);
+
+    // Query fallback: avoid empty ACT/N for short factual asks (e.g. "como está o clima hoje?")
+    if (!actionOut && tag === '[ex]') {
+      actionOut = '!consultar';
+    }
+    if (!nichesOut.length && /\bclima\b/i.test(lowerNorm)) {
+      nichesOut = ['#clima'];
+    }
+
     const parts: string[] = [];
     if (tag) parts.push(tag);
-    if (action) parts.push(action);
-    for (const n of topNiches) parts.push(n);
+    if (actionOut) parts.push(actionOut);
+    for (const n of nichesOut) parts.push(n);
     for (const e of entities) parts.push(e);
     for (const a of attrs) parts.push(a);
 
     const flags = this.computeFlags(text, parts);
     const finalOutput = this.buildOpcode('Q', {
       tag,
-      action,
-      niches: topNiches,
+      action: actionOut,
+      goal: spec.goal,
+      cstr: spec.cstr,
+      proto: spec.proto,
+      niches: nichesOut,
       entities,
       attrs,
     }, flags);
@@ -636,10 +654,17 @@ export class PithEngine {
       .slice(0, PithEngine.MAX_QUERY_NICHES)
       .map(n => n.word);
 
+    const spec = this.extractProductSpec(text);
+    const lowerNorm = text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    const { action: actionOut, niches: nichesOut } = this.applySpecToQuery(spec, action, topNiches, lowerNorm);
+
     const parts: string[] = [];
     if (stance) parts.push(stance);
-    if (action) parts.push(action);
-    for (const n of topNiches) parts.push(n);
+    if (actionOut) parts.push(actionOut);
+    for (const n of nichesOut) parts.push(n);
     for (const e of entities) parts.push(e);
     for (const a of attrs.slice(0, 3)) parts.push(a);
 
@@ -647,8 +672,11 @@ export class PithEngine {
     const finalOutput = this.buildOpcode('V', {
       stance,
       tag: '',
-      action,
-      niches: topNiches,
+      action: actionOut,
+      goal: spec.goal,
+      cstr: spec.cstr,
+      proto: spec.proto,
+      niches: nichesOut,
       entities,
       attrs: attrs.slice(0, 3),
     }, flags);
@@ -666,6 +694,155 @@ export class PithEngine {
   // ═══════════════════════════════════════════════════
   // SHARED LAYERS
   // ═══════════════════════════════════════════════════
+
+  /** FNV-1a–style digest (8 hex) for ISA line integrity; same algorithm as append step. */
+  public static isaCrc(baseWithoutCrc: string): string {
+    let hash = 2166136261;
+    for (let i = 0; i < baseWithoutCrc.length; i++) {
+      hash ^= baseWithoutCrc.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    const hex = (hash >>> 0).toString(16).toUpperCase();
+    return hex.padStart(8, '0').slice(-8);
+  }
+
+  /** Product / protocol intent: GOAL, CSTR, PROTO (assembly I/O, human-only output, etc.) */
+  private extractProductSpec(raw: string): { goal: string; cstr: string; proto: string } {
+    const EMPTY = '_';
+    const n = raw
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+    const hasAssembly = /\bassembly\b/.test(n);
+    const hasIa = /\b(ia|ai|llm)\b/.test(n);
+    const humanOut =
+      (/linguagem\s+humana/.test(n) && /resposta/.test(n)) ||
+      /\b(s[oó]|somente|apenas)\s+na\s+resposta\b/.test(n) ||
+      (/\bhuman\s+language\b/.test(n) && /\bresponse\b/.test(n)) ||
+      /\bonly\s+in\s+(the\s+)?response\b/.test(n);
+    const asmIn =
+      /\bvai\s+receber\s+apenas\b/.test(n) ||
+      /\b(receive|receber)\s+only\s+assembly\b/.test(n) ||
+      (/\b(apenas|somente|only)\s+(o\s+)?assembly\b/.test(n) && /receber|receive|input|entrada/.test(n)) ||
+      (hasAssembly && /\b(apenas|somente|only)\b/.test(n) && /\b(receber|receive|entrada|input)\b/.test(n));
+
+    // Strong autonomy/ML triggers (opt-in only):
+    // require at least one "learning/autonomy" term + one "self-evolution" intent term.
+    const hasMlCore =
+      /\b(aprendizado de maquina|machine learning|ml)\b/.test(n) ||
+      (/\b(aprendizado|learning)\b/.test(n) && /\b(maquina|machine)\b/.test(n));
+    const hasAutonomyIntent =
+      /\b(evoluir sozinho|evolua sozinho|sozinho)\b/.test(n) ||
+      /\b(autonomo|autonomous|self[-\s]?improve|self[-\s]?learning)\b/.test(n);
+    const hasStrongLearnSpec = hasMlCore && hasAutonomyIntent;
+
+    // Robust prompt spec (opt-in): generic prompt + reliability coverage
+    const hasPromptCore =
+      /\b(prompt|prompts)\b/.test(n) ||
+      /\b(comando|instrucao|instrucoes)\b/.test(n);
+    const hasGenericCoverage =
+      /\b(generico|gen[eé]rico|qualquer|any|todos os casos|all cases)\b/.test(n) &&
+      /\b(funcione|funcionar|robusto|robust|consistente|consistent)\b/.test(n);
+    const hasStrongPromptSpec = hasPromptCore && hasGenericCoverage;
+
+    const goalParts: string[] = [];
+    if (hasAssembly && hasIa) goalParts.push('ASM_IA');
+    if (humanOut) goalParts.push('HUMAN_OUT');
+    if (asmIn) goalParts.push('ASM_IN');
+    if (hasStrongLearnSpec) goalParts.push('SELF_IMPROVE');
+    if (hasStrongPromptSpec) goalParts.push('ROBUST_PROMPT');
+
+    const cstrParts: string[] = [];
+    if (asmIn || (hasAssembly && /\b(apenas|somente|only)\b/.test(n) && /\b(receber|receive)\b/.test(n))) {
+      cstrParts.push('IN_ASM_ONLY');
+    }
+    if (humanOut) cstrParts.push('OUT_HUMAN_ONLY');
+    if (hasStrongLearnSpec) cstrParts.push('SAFE_AUTONOMY');
+    if (hasStrongPromptSpec) cstrParts.push('GENERIC_COVERAGE');
+
+    const protoParts: string[] = [];
+    if (asmIn || cstrParts.includes('IN_ASM_ONLY')) protoParts.push('IN=ASM');
+    if (humanOut || cstrParts.includes('OUT_HUMAN_ONLY')) protoParts.push('OUT=HUMAN');
+    if (hasStrongLearnSpec) protoParts.push('LEARN=ON');
+    if (hasStrongLearnSpec) protoParts.push('UPDATE=CONTROLLED');
+    if (hasStrongPromptSpec) protoParts.push('INPUT=ANY');
+    if (hasStrongPromptSpec) protoParts.push('OUTPUT=CONSISTENT');
+
+    const goal = [...new Set(goalParts)].join('+') || EMPTY;
+    const cstr = [...new Set(cstrParts)].join('|') || EMPTY;
+    const proto = [...new Set(protoParts)].join('|') || EMPTY;
+
+    const meaningful =
+      goal !== EMPTY || cstr !== EMPTY || proto !== EMPTY;
+    if (!meaningful) return { goal: EMPTY, cstr: EMPTY, proto: EMPTY };
+    return { goal, cstr, proto };
+  }
+
+  private static readonly SPEC_NICHE_STOP = new Set([
+    'elogiam', 'elogio', 'ninguem', 'ninguém', 'sonhou', 'sonhar', 'todos', 'todas',
+    'maravilhosa', 'maravilhoso', 'engine', 'quero', 'queria',
+    'linguagem', 'resposta', 'humana', 'humano', 'receber',
+    'perfeito', 'agora',
+    'funcione', 'precisa', 'qualquer', 'generico', 'genérico', 'prompt',
+  ]);
+
+  private applySpecToQuery(
+    spec: { goal: string; cstr: string; proto: string },
+    action: string,
+    topNiches: string[],
+    lowerFull: string
+  ): { action: string; niches: string[] } {
+    const empty =
+      spec.goal === '_' && spec.cstr === '_' && spec.proto === '_';
+    if (empty) return { action, niches: topNiches };
+
+    const hasIn = spec.proto.includes('IN=ASM');
+    const hasOut = spec.proto.includes('OUT=HUMAN');
+    const hasLearn = spec.goal.includes('SELF_IMPROVE') || spec.proto.includes('LEARN=ON');
+    const hasPromptSpec = spec.goal.includes('ROBUST_PROMPT') || spec.proto.includes('INPUT=ANY');
+    let nextAction = action;
+    if (hasLearn) nextAction = '![define|learning]';
+    else if (hasPromptSpec) nextAction = '![define|prompt]';
+    else if (hasIn && hasOut) nextAction = '![define|protocol]';
+    else if (hasIn) nextAction = '!define_asm_in';
+    else if (hasOut) nextAction = '!define_human_out';
+    else nextAction = '!spec_product';
+
+    const filtered = topNiches
+      .map(n => n.replace(/^#/, ''))
+      .filter(w => w && !PithEngine.SPEC_NICHE_STOP.has(w.toLowerCase()));
+
+    const extra: string[] = [];
+    if (/\bassembly\b/.test(lowerFull) && !filtered.some(x => x.toLowerCase() === 'assembly')) {
+      extra.push('assembly');
+    }
+    if (hasLearn && !filtered.some(x => x.toLowerCase() === 'aprendizado')) {
+      extra.push('aprendizado');
+    }
+    if (hasLearn && !filtered.some(x => x.toLowerCase() === 'maquina')) {
+      extra.push('maquina');
+    }
+    if (hasPromptSpec && !filtered.some(x => x.toLowerCase() === 'algoritmo')) {
+      extra.push('algoritmo');
+    }
+    if (hasPromptSpec && !filtered.some(x => x.toLowerCase() === 'prompt')) {
+      extra.push('prompt');
+    }
+
+    const merged = [...extra, ...filtered];
+    const seen = new Set<string>();
+    const niches: string[] = [];
+    for (const w of merged) {
+      const k = w.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      niches.push('#' + w);
+      if (niches.length >= PithEngine.MAX_QUERY_NICHES) break;
+    }
+
+    return { action: nextAction, niches };
+  }
 
   private computeFlags(originalText: string, parts: string[]): string[] {
     const flags: string[] = [];
@@ -694,6 +871,9 @@ export class PithEngine {
       stance?: string;
       tag?: string;
       action?: string;
+      goal?: string;
+      cstr?: string;
+      proto?: string;
       niches?: string[];
       entities?: string[];
       attrs?: string[];
@@ -701,61 +881,57 @@ export class PithEngine {
     },
     flags: string[]
   ): string {
-    const slots: string[] = [`M=${mode}`];
+    const EMPTY = '_';
 
-    if (data.stance) {
-      const s = data.stance.replace(/[\[\]]/g, '');
-      if (s) slots.push(`S=${s}`);
-    }
+    const stance = data.stance ? data.stance.replace(/[\[\]]/g, '') : '';
+    const tag = data.tag ? data.tag.replace(/[\[\]]/g, '') : '';
+    const action = data.action ? data.action.replace(/^!/, '') : '';
+    const goal = data.goal && data.goal !== EMPTY ? data.goal : EMPTY;
+    const cstr = data.cstr && data.cstr !== EMPTY ? data.cstr : EMPTY;
+    const proto = data.proto && data.proto !== EMPTY ? data.proto : EMPTY;
 
-    if (data.tag) {
-      const t = data.tag.replace(/[\[\]]/g, '');
-      if (t) slots.push(`TAG=${t}`);
-    }
-
-    if (data.action) {
-      const clean = data.action.replace(/^!/, '');
-      if (clean) slots.push(`ACT=${clean}`);
-    }
-
-    if (data.niches && data.niches.length) {
-      const ns = data.niches
-        .map(n => n.replace(/^#/, ''))
-        .filter(Boolean)
-        .join(',');
-      if (ns) slots.push(`N=${ns}`);
-    }
-
-    if (data.entities && data.entities.length) {
-      const es = data.entities
-        .map(e => e.replace(/^@/, ''))
-        .filter(Boolean)
-        .join(',');
-      if (es) slots.push(`E=${es}`);
-    }
-
-    if (data.attrs && data.attrs.length) {
-      const as = data.attrs
+    const niches = data.niches && data.niches.length
+      ? data.niches.map(n => n.replace(/^#/, '')).filter(Boolean).join(',')
+      : '';
+    const entities = data.entities && data.entities.length
+      ? data.entities.map(e => e.replace(/^@/, '')).filter(Boolean).join(',')
+      : '';
+    const attrs = data.attrs && data.attrs.length
+      ? data.attrs
         .map(a => a.replace(/^\?/, ''))
         .map(a => a.replace(/^(\d+)[a-z]+$/i, '$1'))
         .filter(Boolean)
-        .join(',');
-      if (as) slots.push(`A=${as}`);
+        .join(',')
+      : '';
+
+    let payload = data.payload ? data.payload.replace(/\s+/g, ' ').trim() : '';
+    if (payload.length > PithEngine.MAX_PAYLOAD_CHARS) {
+      payload = payload.slice(0, PithEngine.MAX_PAYLOAD_CHARS);
     }
 
-    if (data.payload) {
-      let payload = data.payload.replace(/\s+/g, ' ').trim();
-      if (payload.length > PithEngine.MAX_PAYLOAD_CHARS) {
-        payload = payload.slice(0, PithEngine.MAX_PAYLOAD_CHARS);
-      }
-      if (payload) slots.push(`P=${payload}`);
-    }
+    const flagsOut = flags.length ? flags.join(',') : '';
 
-    if (flags.length) {
-      slots.push(`F=${flags.join(',')}`);
-    }
+    // ISA v2 canonical order (all slots mandatory):
+    // M IO TAG S ACT GOAL CSTR PROTO N E A P F + CRC
+    const ordered = [
+      `M=${mode}`,
+      'IO=A2H',
+      `TAG=${tag || EMPTY}`,
+      `S=${stance || EMPTY}`,
+      `ACT=${action || EMPTY}`,
+      `GOAL=${goal}`,
+      `CSTR=${cstr}`,
+      `PROTO=${proto}`,
+      `N=${niches || EMPTY}`,
+      `E=${entities || EMPTY}`,
+      `A=${attrs || EMPTY}`,
+      `P=${payload || EMPTY}`,
+      `F=${flagsOut || EMPTY}`,
+    ];
 
-    return slots.join(' ');
+    const base = ordered.join(' ');
+    const crc = PithEngine.isaCrc(base);
+    return `${base} CRC=${crc}`;
   }
 
   private humanNoiseLayer(text: string): string {
