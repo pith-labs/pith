@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 import AuthModal from '../components/AuthModal';
@@ -6,11 +6,10 @@ import {
   Zap, TerminalSquare, Crown, LogOut, Copy, Share2,
   BarChart2, Key, ChevronRight, RefreshCw
 } from 'lucide-react';
-import { api } from '../lib/api';
+import { api, API_URL } from '../lib/api';
 import { PithEngine } from '@pith/core';
 import { useTranslation } from 'react-i18next';
 
-const engine = new PithEngine();
 const FREE_MONTHLY_LIMIT = 100;
 
 export default function DashboardPage() {
@@ -29,6 +28,29 @@ export default function DashboardPage() {
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [massaGorda, setMassaGorda] = useState(0);
+  const engine = useMemo(
+    () =>
+      new PithEngine({
+        onOptimizeResult: (p) => {
+          if (!API_URL) return;
+          if (p.noiseRemoved < 5 || p.text.trim().length < 30) return;
+          if (!session?.accessToken) return;
+          void fetch(`${API_URL}/v1/ml/sample`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+            body: JSON.stringify({
+              text: p.text,
+              output: p.output,
+              noiseRemoved: p.noiseRemoved,
+              isQuery: p.isQuery,
+              includeInputForMl: false,
+              kind: p.kind,
+            }),
+          }).catch(() => {});
+        },
+      }),
+    [session?.accessToken]
+  );
 
   const isPro = session?.tier === 'pro';
   const monthlyUsed = stats?.monthlyCompressions ?? 0;

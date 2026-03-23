@@ -6,6 +6,7 @@ import { PithEngine } from '@pith/core';
 import { auth } from '../middleware/auth.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { db } from '../db/client.js';
+import { encryptMlUtf8, decryptMlUtf8, mlEncryptionConfigured } from '../lib/mlCrypto.js';
 
 const bodySchema = z.object({
   text: z.string().min(1).max(50_000),
@@ -24,6 +25,12 @@ const feedbackSchema = z.object({
   correctedOpcode: z.string().min(1).max(25_000).optional(),
   reason: z.string().max(240).optional(),
   includeInputForMl: z.boolean().optional(),
+});
+const jobSchema = z.object({
+  promote: z.boolean().optional(),
+});
+const promoteSchema = z.object({
+  configId: z.string().uuid(),
 });
 
 export const mlRouter = new Hono();
@@ -81,6 +88,12 @@ function getOpcodeSlot(opcode: string, key: string): string {
   return m ? m[1] : '_';
 }
 
+function parseCsvSlot(opcode: string, key: string): string[] {
+  const raw = getOpcodeSlot(opcode, key);
+  if (!raw || raw === '_') return [];
+  return raw.split(',').map((x) => x.trim()).filter(Boolean);
+}
+
 function hasAnyToken(text: string, tokens: string[]): boolean {
   return tokens.some((t) => new RegExp(`\\b${t}\\b`, 'i').test(text));
 }
@@ -129,6 +142,259 @@ function evaluateAutoQuality(text: string, output: string, noiseRemoved: number)
   };
 }
 
+type EngineRules = {
+  stopNiches: string[];
+  defaultActionForTag: Record<string, string>;
+};
+
+function buildRulesFromSamples(
+  samples: Array<{ opcode: string; auto_score: number | null; auto_verdict: string | null }>,
+  feedback: Array<{ verdict: string; opcode: string; corrected_opcode: string | null }>
+): { rules: EngineRules; metrics: Record<string, unknown> } {
+  const exActionFreq = new Map<string, number>();
+  let autoScoreSum = 0;
+  let autoScoreCount = 0;
+  let upCount = 0;
+  let downCount = 0;
+
+  for (const s of samples) {
+    if (s.auto_verdict === 'up') upCount++;
+    if (s.auto_verdict === 'down') downCount++;
+    if (typeof s.auto_score === 'number') {
+      autoScoreSum += s.auto_score;
+      autoScoreCount++;
+    }
+    const tag = getOpcodeSlot(s.opcode, 'TAG').toLowerCase();
+    const act = getOpcodeSlot(s.opcode, 'ACT');
+    if (tag === 'ex' && act && act !== '_') {
+      exActionFreq.set(act, (exActionFreq.get(act) || 0) + 1);
+    }
+  }
+
+  let defaultExAction = 'consultar';
+  let maxFreq = 0;
+  for (const [act, freq] of exActionFreq.entries()) {
+    if (freq > maxFreq) {
+      maxFreq = freq;
+      defaultExAction = act;
+    }
+  }
+
+  const stopFreq = new Map<string, number>();
+  for (const f of feedback) {
+    if (f.verdict !== 'down' || !f.corrected_opcode) continue;
+    const oldN = parseCsvSlot(f.opcode, 'N').map((x) => x.toLowerCase());
+    const newN = new Set(parseCsvSlot(f.corrected_opcode, 'N').map((x) => x.toLowerCase()));
+    for (const n of oldN) {
+      if (!newN.has(n)) stopFreq.set(n, (stopFreq.get(n) || 0) + 1);
+    }
+  }
+  const stopNiches = [...stopFreq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 12)
+    .map(([k]) => k);
+
+  const rules: EngineRules = {
+    stopNiches,
+    defaultActionForTag: { ex: defaultExAction },
+  };
+  const metrics = {
+    sampleCount: samples.length,
+    feedbackCount: feedback.length,
+    autoUp: upCount,
+    autoDown: downCount,
+    avgAutoScore: autoScoreCount ? Math.round(autoScoreSum / autoScoreCount) : null,
+  };
+  return { rules, metrics };
+}
+
+function resolveSampleOpcode(row: {
+  opcode: string | null;
+  opcode_ciphertext: string | null;
+  crypto_version: number | null;
+}): string | null {
+  const ver = row.crypto_version ?? (row.opcode_ciphertext ? 1 : 0);
+  if (ver === 1 && row.opcode_ciphertext) {
+    if (!mlEncryptionConfigured()) return null;
+    try {
+      return decryptMlUtf8(row.opcode_ciphertext);
+    } catch {
+      return null;
+    }
+  }
+  return row.opcode && String(row.opcode).length ? row.opcode : null;
+}
+
+function resolveFeedbackRow(f: {
+  verdict: string;
+  opcode: string | null;
+  opcode_ciphertext: string | null;
+  corrected_opcode: string | null;
+  corrected_opcode_ciphertext: string | null;
+  crypto_version: number | null;
+}): { verdict: string; opcode: string; corrected_opcode: string | null } | null {
+  let op: string | null = null;
+  const ver = f.crypto_version ?? (f.opcode_ciphertext ? 1 : 0);
+  if (ver === 1 && f.opcode_ciphertext) {
+    if (!mlEncryptionConfigured()) return null;
+    try {
+      op = decryptMlUtf8(f.opcode_ciphertext);
+    } catch {
+      return null;
+    }
+  } else {
+    op = f.opcode && String(f.opcode).length ? f.opcode : null;
+  }
+  if (!op) return null;
+  let corr: string | null = f.corrected_opcode;
+  if (ver === 1 && f.corrected_opcode_ciphertext) {
+    if (!mlEncryptionConfigured()) return null;
+    try {
+      corr = decryptMlUtf8(f.corrected_opcode_ciphertext);
+    } catch {
+      corr = null;
+    }
+  }
+  return { verdict: f.verdict, opcode: op, corrected_opcode: corr };
+}
+
+export async function insertMlTelemetrySample(params: {
+  userId: string;
+  apiKeyId: string | null;
+  text: string;
+  output: string;
+  noiseRemoved: number;
+  isQuery: boolean;
+  sampleKind?: 'user_prompt' | 'assistant_response';
+  source?: 'extension' | 'api';
+  includeInputForMl?: boolean;
+}): Promise<{
+  id: string | null;
+  learned: boolean;
+  reason?: string;
+  autoScore: number;
+  autoVerdict: 'up' | 'down';
+  autoReason: string;
+}> {
+  const {
+    userId,
+    apiKeyId,
+    text,
+    output,
+    noiseRemoved,
+    isQuery,
+    sampleKind = 'user_prompt',
+    source: sourceOverride,
+    includeInputForMl = false,
+  } = params;
+
+  const learnability = evaluateLearnability(text, output, noiseRemoved);
+  const autoEval = evaluateAutoQuality(text, output, noiseRemoved);
+  const learned = learnability.ok && autoEval.learn;
+  const inputSha256 = crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+  const autoReason = !learnability.ok ? learnability.reason : autoEval.reason;
+
+  const base = {
+    user_id: userId,
+    input_sha256: inputSha256,
+    noise_removed: noiseRemoved,
+    is_query: isQuery,
+    sample_kind: sampleKind,
+    source: sourceOverride ?? (apiKeyId ? 'api' : 'extension'),
+    auto_score: autoEval.score,
+    auto_verdict: autoEval.verdict,
+    auto_reason: autoReason,
+  };
+
+  const row = mlEncryptionConfigured()
+    ? {
+        ...base,
+        input_text: null,
+        opcode: null,
+        input_ciphertext: encryptMlUtf8(text),
+        opcode_ciphertext: encryptMlUtf8(output),
+        crypto_version: 1,
+      }
+    : {
+        ...base,
+        input_text: includeInputForMl ? text : null,
+        opcode: output,
+        input_ciphertext: null,
+        opcode_ciphertext: null,
+        crypto_version: 0,
+      };
+
+  const { data: insertedSample } = await db.from('ml_samples').insert(row).select('id').single();
+
+  return {
+    id: insertedSample?.id ?? null,
+    learned,
+    reason: learned ? undefined : (!learnability.ok ? learnability.reason : autoEval.reason),
+    autoScore: autoEval.score,
+    autoVerdict: autoEval.verdict,
+    autoReason,
+  };
+}
+
+export async function compileMlConfigJob(opts: { createdBy: string | null; promote: boolean }) {
+  const [{ data: samples }, { data: feedback }, { data: lastCfg }] = await Promise.all([
+    db
+      .from('ml_samples')
+      .select('opcode, opcode_ciphertext, crypto_version, auto_score, auto_verdict')
+      .order('created_at', { ascending: false })
+      .limit(1000),
+    db
+      .from('ml_feedback_events')
+      .select(
+        'verdict, opcode, opcode_ciphertext, corrected_opcode, corrected_opcode_ciphertext, crypto_version'
+      )
+      .order('created_at', { ascending: false })
+      .limit(1000),
+    db
+      .from('ml_engine_config')
+      .select('version')
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const rowsS = (samples ?? [])
+    .map((r) => {
+      const opcode = resolveSampleOpcode(r as any);
+      if (!opcode) return null;
+      return {
+        opcode,
+        auto_score: (r as any).auto_score as number | null,
+        auto_verdict: (r as any).auto_verdict as string | null,
+      };
+    })
+    .filter(Boolean) as Array<{ opcode: string; auto_score: number | null; auto_verdict: string | null }>;
+
+  const rowsF = (feedback ?? [])
+    .map((r) => resolveFeedbackRow(r as any))
+    .filter(Boolean) as Array<{ verdict: string; opcode: string; corrected_opcode: string | null }>;
+  const { rules, metrics } = buildRulesFromSamples(rowsS, rowsF);
+
+  const nextVersion = ((lastCfg?.version as number | undefined) ?? 0) + 1;
+  const nextStatus = opts.promote ? 'active' : 'candidate';
+  if (opts.promote) await db.from('ml_engine_config').update({ status: 'archived' }).eq('status', 'active');
+
+  const { data: inserted } = await db
+    .from('ml_engine_config')
+    .insert({
+      version: nextVersion,
+      status: nextStatus,
+      rules_json: rules,
+      metrics_json: metrics,
+      created_by: opts.createdBy,
+      promoted_at: opts.promote ? new Date().toISOString() : null,
+    })
+    .select('id, version, status')
+    .single();
+
+  return { config: inserted ?? null, rules, metrics };
+}
+
 // POST /v1/ml/sample — extension / clients: (input, engine output) for future ML + usage_logs
 mlRouter.post('/sample', auth, rateLimit, zValidator('json', bodySchema), async (c) => {
   const { text, output, noiseRemoved, isQuery, includeInputForMl, kind } = c.req.valid('json');
@@ -136,7 +402,6 @@ mlRouter.post('/sample', auth, rateLimit, zValidator('json', bodySchema), async 
   const apiKeyId = c.get('apiKeyId');
 
   const tokensSaved = Math.max(0, Math.floor((text.length - output.length) / 4));
-  const inputSha256 = crypto.createHash('sha256').update(text, 'utf8').digest('hex');
   const sampleKind = kind ?? 'user_prompt';
 
   db.from('usage_logs').insert({
@@ -147,44 +412,25 @@ mlRouter.post('/sample', auth, rateLimit, zValidator('json', bodySchema), async 
     input_length: text.length,
   }).then();
 
-  const learnability = evaluateLearnability(text, output, noiseRemoved);
-  if (!learnability.ok) {
-    return c.json({ ok: true, recorded: true, learned: false, reason: learnability.reason });
-  }
-
-  const autoEval = evaluateAutoQuality(text, output, noiseRemoved);
-  if (!autoEval.learn) {
-    return c.json({
-      ok: true,
-      recorded: true,
-      learned: false,
-      reason: autoEval.reason,
-      autoScore: autoEval.score,
-      autoVerdict: autoEval.verdict,
-    });
-  }
-
-  const { data: insertedSample } = await db.from('ml_samples').insert({
-    user_id: userId,
-    input_sha256: inputSha256,
-    input_text: includeInputForMl ? text : null,
-    opcode: output,
-    noise_removed: noiseRemoved,
-    is_query: isQuery,
-    sample_kind: sampleKind,
-    source: apiKeyId ? 'api' : 'extension',
-    auto_score: autoEval.score,
-    auto_verdict: autoEval.verdict,
-    auto_reason: autoEval.reason,
-  }).select('id').single();
+  const result = await insertMlTelemetrySample({
+    userId,
+    apiKeyId: apiKeyId || null,
+    text,
+    output,
+    noiseRemoved,
+    isQuery,
+    sampleKind,
+    includeInputForMl,
+  });
 
   return c.json({
     ok: true,
     recorded: true,
-    learned: true,
-    sampleId: insertedSample?.id ?? null,
-    autoScore: autoEval.score,
-    autoVerdict: autoEval.verdict,
+    learned: result.learned,
+    sampleId: result.id,
+    reason: result.reason,
+    autoScore: result.autoScore,
+    autoVerdict: result.autoVerdict,
   });
 });
 
@@ -222,16 +468,35 @@ mlRouter.post('/feedback', auth, zValidator('json', feedbackSchema), async (c) =
   let inputSha256: string | null = null;
   if (text) inputSha256 = crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 
-  const payload: Record<string, unknown> = {
-    user_id: userId,
-    sample_id: sampleId ?? null,
-    input_sha256: inputSha256,
-    input_text: text && includeInputForMl ? text : null,
-    opcode,
-    corrected_opcode: correctedOpcode ?? null,
-    verdict,
-    reason: reason ?? null,
-  };
+  const payload: Record<string, unknown> = mlEncryptionConfigured()
+    ? {
+        user_id: userId,
+        sample_id: sampleId ?? null,
+        input_sha256: inputSha256,
+        input_text: null,
+        opcode: null,
+        corrected_opcode: null,
+        input_ciphertext: text ? encryptMlUtf8(text) : null,
+        opcode_ciphertext: encryptMlUtf8(opcode),
+        corrected_opcode_ciphertext: correctedOpcode ? encryptMlUtf8(correctedOpcode) : null,
+        crypto_version: 1,
+        verdict,
+        reason: reason ?? null,
+      }
+    : {
+        user_id: userId,
+        sample_id: sampleId ?? null,
+        input_sha256: inputSha256,
+        input_text: text && includeInputForMl ? text : null,
+        opcode,
+        corrected_opcode: correctedOpcode ?? null,
+        input_ciphertext: null,
+        opcode_ciphertext: null,
+        corrected_opcode_ciphertext: null,
+        crypto_version: 0,
+        verdict,
+        reason: reason ?? null,
+      };
 
   const { data: inserted } = await db
     .from('ml_feedback_events')
@@ -240,4 +505,60 @@ mlRouter.post('/feedback', auth, zValidator('json', feedbackSchema), async (c) =
     .single();
 
   return c.json({ ok: true, learned: true, feedbackId: inserted?.id ?? null });
+});
+
+// GET /v1/ml/config/active — inspect active runtime rules
+mlRouter.get('/config/active', auth, async (c) => {
+  const { data } = await db
+    .from('ml_engine_config')
+    .select('id, version, status, rules_json, metrics_json, created_at, promoted_at')
+    .eq('status', 'active')
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return c.json({ ok: true, config: data ?? null });
+});
+
+// GET /v1/ml/config/history?limit=20 — config history
+mlRouter.get('/config/history', auth, async (c) => {
+  const limit = Math.max(1, Math.min(100, Number(c.req.query('limit') ?? 20)));
+  const { data } = await db
+    .from('ml_engine_config')
+    .select('id, version, status, metrics_json, created_at, promoted_at')
+    .order('version', { ascending: false })
+    .limit(limit);
+  return c.json({ ok: true, configs: data ?? [] });
+});
+
+// POST /v1/ml/config/promote — promote a candidate to active
+mlRouter.post('/config/promote', auth, zValidator('json', promoteSchema), async (c) => {
+  const tier = c.get('tier');
+  if (tier !== 'pro') return c.json({ error: 'Pro plan required' }, 403);
+  const { configId } = c.req.valid('json');
+
+  const { data: target } = await db
+    .from('ml_engine_config')
+    .select('id, version, status')
+    .eq('id', configId)
+    .maybeSingle();
+  if (!target) return c.json({ error: 'Config not found' }, 404);
+
+  await db.from('ml_engine_config').update({ status: 'archived' }).eq('status', 'active');
+  await db
+    .from('ml_engine_config')
+    .update({ status: 'active', promoted_at: new Date().toISOString() })
+    .eq('id', configId);
+
+  return c.json({ ok: true, promoted: true, version: target.version });
+});
+
+// POST /v1/ml/job/run — compile DB signals into a candidate config, optionally promote
+mlRouter.post('/job/run', auth, zValidator('json', jobSchema), async (c) => {
+  const tier = c.get('tier');
+  if (tier !== 'pro') return c.json({ error: 'Pro plan required' }, 403);
+  const userId = c.get('userId');
+  const { promote } = c.req.valid('json');
+
+  const result = await compileMlConfigJob({ createdBy: userId, promote: !!promote });
+  return c.json({ ok: true, compiled: true, config: result.config, rules: result.rules, metrics: result.metrics });
 });

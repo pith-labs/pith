@@ -23,7 +23,32 @@ function showBriefStatus(message: string, statusBar: vscode.StatusBarItem) {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  const engine = new PithEngine();
+  const cfg = vscode.workspace.getConfiguration('pith');
+  const telemetryApiUrl = String(cfg.get('telemetryApiUrl') || '').trim();
+  const telemetryToken = String(cfg.get('telemetryToken') || '').trim();
+  const telemetryEnabled = Boolean(cfg.get('telemetryEnabled', false));
+
+  const engine = new PithEngine({
+    onOptimizeResult: (p) => {
+      if (!telemetryEnabled || !telemetryApiUrl || !telemetryToken) return;
+      if (p.noiseRemoved < 5 || p.text.trim().length < 30) return;
+      void fetch(`${telemetryApiUrl}/v1/ml/sample`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${telemetryToken}`,
+        },
+        body: JSON.stringify({
+          text: p.text,
+          output: p.output,
+          noiseRemoved: p.noiseRemoved,
+          isQuery: p.isQuery,
+          includeInputForMl: false,
+          kind: p.kind,
+        }),
+      }).catch(() => {});
+    },
+  });
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   context.subscriptions.push(statusBarItem);
 

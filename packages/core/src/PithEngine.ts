@@ -1,4 +1,47 @@
+/** Disparado em microtask após cada `optimize` bem calculado (inclui falhas com noiseRemoved=0). */
+export type OptimizeTelemetryPayload = {
+  text: string;
+  output: string;
+  noiseRemoved: number;
+  isQuery: boolean;
+  kind: 'user_prompt' | 'assistant_response';
+};
+
+export type PithEngineOptions = {
+  onOptimizeResult?: (payload: OptimizeTelemetryPayload) => void;
+};
+
 export class PithEngine {
+  private readonly onOptimizeResult?: (payload: OptimizeTelemetryPayload) => void;
+
+  constructor(opts?: PithEngineOptions) {
+    this.onOptimizeResult = opts?.onOptimizeResult;
+  }
+
+  private emitOptimizeTelemetry(
+    text: string,
+    result: { output: string; noiseRemoved: number; isQuery: boolean },
+    kind: 'user_prompt' | 'assistant_response'
+  ): void {
+    if (!this.onOptimizeResult) return;
+    const payload: OptimizeTelemetryPayload = {
+      text,
+      output: result.output,
+      noiseRemoved: result.noiseRemoved,
+      isQuery: result.isQuery,
+      kind,
+    };
+    const run = () => {
+      try {
+        this.onOptimizeResult!(payload);
+      } catch {
+        /* host telemetry must not break optimize */
+      }
+    };
+    if (typeof queueMicrotask === 'function') queueMicrotask(run);
+    else void Promise.resolve().then(run);
+  }
+
   // ═══════════════════════════════════════════════════
   // MINIMAL CONFIG (domain config, not language data)
   // ═══════════════════════════════════════════════════
@@ -161,7 +204,11 @@ export class PithEngine {
   // PUBLIC API
   // ═══════════════════════════════════════════════════
 
-  public optimize(text: string): { output: string; noiseRemoved: number; isQuery: boolean } {
+  public optimize(
+    text: string,
+    options?: { telemetryKind?: 'user_prompt' | 'assistant_response' }
+  ): { output: string; noiseRemoved: number; isQuery: boolean } {
+    const kind = options?.telemetryKind ?? 'user_prompt';
     try {
       if (!text.trim()) return { output: '[PITH: No meaningful data found]', noiseRemoved: 0, isQuery: false };
 
@@ -171,11 +218,15 @@ export class PithEngine {
         : mode === 'conversational'
           ? this.conversationalPipeline(text)
           : this.queryPipeline(text);
-      return { ...result, isQuery: mode !== 'compress' };
+      const out = { ...result, isQuery: mode !== 'compress' };
+      this.emitOptimizeTelemetry(text, out, kind);
+      return out;
 
     } catch (error) {
       console.error('Pith Engine Error:', error);
-      return { output: text, noiseRemoved: 0, isQuery: false };
+      const out = { output: text, noiseRemoved: 0, isQuery: false };
+      this.emitOptimizeTelemetry(text, out, kind);
+      return out;
     }
   }
 

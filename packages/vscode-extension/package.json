@@ -14,6 +14,26 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "Pith",
+      "properties": {
+        "pith.telemetryEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable async ML telemetry to /v1/ml/sample."
+        },
+        "pith.telemetryApiUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Pith API base URL (e.g. https://api.pith.app)."
+        },
+        "pith.telemetryToken": {
+          "type": "string",
+          "default": "",
+          "description": "Bearer token used by telemetry requests."
+        }
+      }
+    },
     "commands": [
       {
         "command": "pith.optimize",

@@ -2,6 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
 import { PithEngine } from '@pith/core';
 
+vi.hoisted(() => {
+  process.env.ML_ENCRYPTION_KEY = 'a'.repeat(64);
+});
+
 const { mockFrom } = vi.hoisted(() => {
   const mockFrom = vi.fn((table: string) => {
     const q: any = {
@@ -83,6 +87,7 @@ describe('POST /v1/ml/sample', () => {
     expect(body.ok).toBe(true);
     expect(body.learned).toBe(false);
     expect(body.reason).toBe('forbidden_pattern');
+    expect(body).toHaveProperty('sampleId');
   });
 });
 

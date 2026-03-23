@@ -3,8 +3,29 @@ import { Link } from 'react-router-dom';
 import { TerminalSquare, Zap, Target, Cpu, CheckCircle2 } from 'lucide-react';
 import { PithEngine } from '@pith/core';
 import { useTranslation } from 'react-i18next';
+import { loadSession } from '../lib/auth';
+import { API_URL } from '../lib/api';
 
-const engine = new PithEngine();
+const engine = new PithEngine({
+  onOptimizeResult: (p) => {
+    if (!API_URL) return;
+    if (p.noiseRemoved < 5 || p.text.trim().length < 30) return;
+    const s = loadSession();
+    if (!s?.accessToken) return;
+    void fetch(`${API_URL}/v1/ml/sample`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${s.accessToken}` },
+      body: JSON.stringify({
+        text: p.text,
+        output: p.output,
+        noiseRemoved: p.noiseRemoved,
+        isQuery: p.isQuery,
+        includeInputForMl: false,
+        kind: p.kind,
+      }),
+    }).catch(() => {});
+  },
+});
 
 // ── Interactive Demo ─────────────────────────────────────────────────────────
 function InteractiveDemo() {

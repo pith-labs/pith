@@ -5,21 +5,21 @@
     "src": "../../../../../../../@crx/manifest",
     "isEntry": true
   },
-  "_PithEngine-DFXGaNTn.js": {
-    "file": "assets/PithEngine-DFXGaNTn.js",
+  "_PithEngine-5nnFqurx.js": {
+    "file": "assets/PithEngine-5nnFqurx.js",
     "name": "PithEngine"
   },
   "content.ts-loader.js": {
-    "file": "assets/content.ts-loader-CkLr16HA.js",
+    "file": "assets/content.ts-loader-D3hbCVRy.js",
     "src": "content.ts-loader.js"
   },
   "index.html": {
-    "file": "assets/index.html-C3Qlce0t.js",
+    "file": "assets/index.html-WNgG2U4X.js",
     "name": "index.html",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_PithEngine-DFXGaNTn.js"
+      "_PithEngine-5nnFqurx.js"
     ],
     "css": [
       "assets/index-e6bJhHmU.css"
@@ -32,12 +32,12 @@
     "isEntry": true
   },
   "src/content/content.ts": {
-    "file": "assets/content.ts-3quDJJwC.js",
+    "file": "assets/content.ts-CDiik5fq.js",
     "name": "content.ts",
     "src": "src/content/content.ts",
     "isEntry": true,
     "imports": [
-      "_PithEngine-DFXGaNTn.js"
+      "_PithEngine-5nnFqurx.js"
     ]
   }
 }

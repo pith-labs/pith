@@ -19,13 +19,72 @@ function t(key: string, subs?: string[]): string {
   return s;
 }
 
-const engine = new PithEngine();
 let pithEnabled = true;
 let responseBoost = true;
 let outputCompress = true;
 let sessionToken: string | null = null;
 
 const API_URL = import.meta.env.VITE_API_URL as string;
+
+type LogMeta = {
+  output: string;
+  noiseRemoved: number;
+  isQuery: boolean;
+  kind?: 'user_prompt' | 'assistant_response';
+};
+
+// Telemetry + ML (async via PithEngine microtask → não bloqueia compressão)
+function logUsage(originalText: string, meta: LogMeta) {
+  if (!API_URL) return;
+  if (!sessionToken) {
+    console.warn('[PITH] logUsage skipped: no session token');
+    return;
+  }
+  const send = (includeInputForMl: boolean) => {
+    fetch(`${API_URL}/v1/ml/sample`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify({
+        text: originalText,
+        output: meta.output,
+        noiseRemoved: meta.noiseRemoved,
+        isQuery: meta.isQuery,
+        includeInputForMl,
+        kind: meta.kind ?? 'user_prompt',
+      }),
+    })
+      .then(async (res) => {
+        if (res.status === 401) {
+          console.warn('[PITH] token expired — clearing session');
+          sessionToken = null;
+          chrome.storage.local.remove('pithSession');
+        }
+      })
+      .catch((err) => {
+        console.warn('[PITH] logUsage error:', err);
+      });
+  };
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    chrome.storage.local.get(['pithMlIncludeInput'], (r) => {
+      send(r.pithMlIncludeInput === true);
+    });
+  } else {
+    send(false);
+  }
+}
+
+const engine = new PithEngine({
+  onOptimizeResult: (p) => {
+    const min = p.kind === 'assistant_response' ? 10 : 5;
+    if (p.noiseRemoved < min) return;
+    logUsage(p.text, {
+      output: p.output,
+      noiseRemoved: p.noiseRemoved,
+      isQuery: p.isQuery,
+      kind: p.kind,
+    });
+  },
+});
 
 // Load session token
 if (typeof chrome !== 'undefined' && chrome.storage?.local) {
@@ -132,7 +191,6 @@ function runClaudeAttach() {
       e.stopPropagation();
       const hint = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
       setContentEditableText(input as HTMLElement, responseBoost ? output + hint : output);
-      if (sessionToken) logUsage(text, { output, noiseRemoved, isQuery });
       const btn = getClaudeSendButton();
       setTimeout(() => {
         if (btn && !btn.disabled) {
@@ -159,7 +217,6 @@ function runClaudeAttach() {
       ev.stopPropagation();
       const hint = isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS;
       setContentEditableText(inp, responseBoost ? output + hint : output);
-      if (sessionToken) logUsage(text, { output, noiseRemoved, isQuery });
       setTimeout(() => {
         (sendBtn as any).__lens = true;
         sendBtn.click();
@@ -199,7 +256,6 @@ if (window.location.hostname.includes('claude.ai')) {
         ke.preventDefault();
         ke.stopPropagation();
         setContentEditableText(el, responseBoost ? output + (isQuery ? RESPONSE_HINT_QUERY : RESPONSE_HINT_COMPRESS) : output);
-        if (sessionToken) logUsage(text, { output, noiseRemoved, isQuery });
         const btn = getClaudeSendButton();
         setTimeout(() => {
           if (btn && !btn.disabled) {
@@ -247,7 +303,6 @@ document.addEventListener('keydown', (e) => {
   e.stopPropagation();
   if (isTextarea) setTextareaValue(el as HTMLTextAreaElement, finalOutput);
   else setContentEditableText(el as HTMLElement, finalOutput);
-  if (sessionToken) logUsage(text, { output, noiseRemoved, isQuery });
 
   if (isClaude) {
     const btn = getClaudeSendButton();
@@ -316,8 +371,6 @@ document.addEventListener('click', (e) => {
     setContentEditableText(input as HTMLElement, finalOutput);
   }
 
-  if (sessionToken) logUsage(text, { output, noiseRemoved, isQuery });
-
   e.preventDefault();
   e.stopPropagation();
 
@@ -385,13 +438,12 @@ function compressAIResponse(el: HTMLElement): void {
   if (!text || text.length < 150) return;
   if (isCodeHeavy(text)) return;
 
-  const { output, noiseRemoved, isQuery } = engine.optimize(text);
+  const { output, noiseRemoved } = engine.optimize(text, { telemetryKind: 'assistant_response' });
   if (noiseRemoved < 10) return;
 
   processedResponses.add(el);
 
   const originalHTML = el.innerHTML;
-  logUsage(text, { output, noiseRemoved, isQuery, kind: 'assistant_response' });
 
   // Wrapper
   const wrapper = document.createElement('div');
@@ -544,53 +596,6 @@ function isCodeHeavy(text: string): boolean {
   }
 
   return codeLines / lines.length > 0.5;
-}
-
-type LogMeta = {
-  output: string;
-  noiseRemoved: number;
-  isQuery: boolean;
-  kind?: 'user_prompt' | 'assistant_response';
-};
-
-// Telemetry + ML dataset (hash always; plaintext only if pithMlIncludeInput)
-function logUsage(originalText: string, meta: LogMeta) {
-  if (!API_URL) return;
-  if (!sessionToken) {
-    console.warn('[PITH] logUsage skipped: no session token');
-    return;
-  }
-  const send = (includeInputForMl: boolean) => {
-    fetch(`${API_URL}/v1/ml/sample`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
-      body: JSON.stringify({
-        text: originalText,
-        output: meta.output,
-        noiseRemoved: meta.noiseRemoved,
-        isQuery: meta.isQuery,
-        includeInputForMl,
-        kind: meta.kind ?? 'user_prompt',
-      }),
-    })
-      .then(async (res) => {
-        if (res.status === 401) {
-          console.warn('[PITH] token expired — clearing session');
-          sessionToken = null;
-          chrome.storage.local.remove('pithSession');
-        }
-      })
-      .catch((err) => {
-        console.warn('[PITH] logUsage error:', err);
-      });
-  };
-  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-    chrome.storage.local.get(['pithMlIncludeInput'], (r) => {
-      send(r.pithMlIncludeInput === true);
-    });
-  } else {
-    send(false);
-  }
 }
 
 // Show a transient badge notification

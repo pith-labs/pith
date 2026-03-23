@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL as string; // https://pith-api.onrender.com
+export const API_URL = import.meta.env.VITE_API_URL as string; // https://pith-api.onrender.com
 
 async function request<T>(path: string, token: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {

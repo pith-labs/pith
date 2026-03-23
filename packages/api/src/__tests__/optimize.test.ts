@@ -106,7 +106,9 @@ describe('POST /v1/optimize', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: 'Please help me optimize my database query performance in PostgreSQL.' }),
     });
+    await new Promise<void>((r) => setImmediate(r));
     expect(mockFrom).toHaveBeenCalledWith('usage_logs');
+    expect(mockFrom).toHaveBeenCalledWith('ml_samples');
   });
 });
 

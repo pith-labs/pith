@@ -38,6 +38,31 @@ var vscode = __toESM(require("vscode"));
 
 // ../core/src/PithEngine.ts
 var PithEngine = class _PithEngine {
+  onOptimizeResult;
+  constructor(opts) {
+    this.onOptimizeResult = opts?.onOptimizeResult;
+  }
+  emitOptimizeTelemetry(text, result, kind) {
+    if (!this.onOptimizeResult)
+      return;
+    const payload = {
+      text,
+      output: result.output,
+      noiseRemoved: result.noiseRemoved,
+      isQuery: result.isQuery,
+      kind
+    };
+    const run = () => {
+      try {
+        this.onOptimizeResult(payload);
+      } catch {
+      }
+    };
+    if (typeof queueMicrotask === "function")
+      queueMicrotask(run);
+    else
+      void Promise.resolve().then(run);
+  }
   // ═══════════════════════════════════════════════════
   // MINIMAL CONFIG (domain config, not language data)
   // ═══════════════════════════════════════════════════
@@ -241,6 +266,7 @@ var PithEngine = class _PithEngine {
   static QUERY_THRESHOLD = 6;
   static COMPRESS_THRESHOLD = 4;
   static MAX_QUERY_NICHES = 4;
+  static MAX_PAYLOAD_CHARS = 256;
   // Morphological patterns (algorithmic, not word lists)
   // Adjective/determiner suffixes — Latin-derived morphological patterns, never verb roots
   // -ular/-olar/-lear: celular, solar, nuclear, linear, popular, molecular, circular
@@ -252,16 +278,21 @@ var PithEngine = class _PithEngine {
   // ═══════════════════════════════════════════════════
   // PUBLIC API
   // ═══════════════════════════════════════════════════
-  optimize(text) {
+  optimize(text, options) {
+    const kind = options?.telemetryKind ?? "user_prompt";
     try {
       if (!text.trim())
         return { output: "[PITH: No meaningful data found]", noiseRemoved: 0, isQuery: false };
       const mode = this.detectMode(text);
       const result = mode === "compress" ? this.compressPipeline(text) : mode === "conversational" ? this.conversationalPipeline(text) : this.queryPipeline(text);
-      return { ...result, isQuery: mode !== "compress" };
+      const out = { ...result, isQuery: mode !== "compress" };
+      this.emitOptimizeTelemetry(text, out, kind);
+      return out;
     } catch (error) {
       console.error("Pith Engine Error:", error);
-      return { output: text, noiseRemoved: 0, isQuery: false };
+      const out = { output: text, noiseRemoved: 0, isQuery: false };
+      this.emitOptimizeTelemetry(text, out, kind);
+      return out;
     }
   }
   compressCode(code) {
@@ -351,11 +382,12 @@ var PithEngine = class _PithEngine {
     const totalWords = patterned.split(/\s+/).length;
     const filtered = this.scoreFilterLines(patterned, freq, totalWords, _PithEngine.COMPRESS_THRESHOLD);
     const abbreviated = this.abbreviate(filtered);
-    const final = this.restoreAndClean(abbreviated, preserveMap);
-    if (!final.trim())
+    const final = this.restoreAndClean(abbreviated, preserveMap).trim();
+    if (!final)
       return { output: text, noiseRemoved: 0 };
-    const finalOutput = this.constraintLayer(final.trim(), text, []);
-    const outputWordCount = finalOutput.split(/\s+/).length;
+    const flags = this.computeFlags(text, []);
+    const finalOutput = this.buildOpcode("C", { payload: final }, flags);
+    const outputWordCount = final.split(/\s+/).length;
     const noise = originalWordCount > 0 ? Math.max(0, Math.floor((originalWordCount - outputWordCount) / originalWordCount * 100)) : 0;
     return { output: finalOutput, noiseRemoved: noise };
   }
@@ -510,21 +542,37 @@ var PithEngine = class _PithEngine {
       }
     }
     const topNiches = niches.sort((a, b) => b.score - a.score).slice(0, _PithEngine.MAX_QUERY_NICHES).map((n) => n.word);
+    const spec = this.extractProductSpec(text);
+    const lowerNorm = this.isaNorm(text);
+    let { action: actionOut, niches: nichesOut } = this.applySpecToQuery(spec, action, topNiches, lowerNorm);
+    const patched = this.patchGenericQueryInterpretation(lowerNorm, tag, actionOut, nichesOut, [...attrs]);
+    actionOut = patched.action;
+    nichesOut = patched.niches;
+    const attrsFinal = patched.attrs;
     const parts = [];
     if (tag)
       parts.push(tag);
-    if (action)
-      parts.push(action);
-    for (const n of topNiches)
+    if (actionOut)
+      parts.push(actionOut);
+    for (const n of nichesOut)
       parts.push(n);
     for (const e of entities)
       parts.push(e);
-    for (const a of attrs)
+    for (const a of attrsFinal)
       parts.push(a);
-    let finalOutput = parts.join(" ").trim();
+    const flags = this.computeFlags(text, parts);
+    const finalOutput = this.buildOpcode("Q", {
+      tag,
+      action: actionOut,
+      goal: spec.goal,
+      cstr: spec.cstr,
+      proto: spec.proto,
+      niches: nichesOut,
+      entities,
+      attrs: attrsFinal
+    }, flags);
     if (!finalOutput)
       return { output: text, noiseRemoved: 0 };
-    finalOutput = this.constraintLayer(finalOutput, text, parts);
     const outputWordCount = finalOutput.split(/\s+/).length;
     const noise = originalWordCount > 0 ? Math.max(0, Math.floor((originalWordCount - outputWordCount) / originalWordCount * 100)) : 0;
     return { output: finalOutput, noiseRemoved: noise };
@@ -602,6 +650,14 @@ var PithEngine = class _PithEngine {
         attrs.push("?" + item.word);
         continue;
       }
+      if (/^(meu|minha|meus|minhas|nosso|nossa|nossos|nossas)$/i.test(item.word)) {
+        attrs.push("?" + key);
+        continue;
+      }
+      if (/^(esposa|esposo|marido|filho|filha)$/i.test(item.word)) {
+        attrs.push("?" + key);
+        continue;
+      }
       if (_PithEngine.ADJECTIVE_SUFFIX.test(key)) {
         attrs.push("?" + key);
         continue;
@@ -618,21 +674,34 @@ var PithEngine = class _PithEngine {
         niches.push({ word: "#" + item.word, score: item.score });
     }
     const topNiches = niches.sort((a, b) => b.score - a.score).slice(0, _PithEngine.MAX_QUERY_NICHES).map((n) => n.word);
+    const spec = this.extractProductSpec(text);
+    const lowerNorm = this.isaNorm(text);
+    const { action: actionOut, niches: nichesOut } = this.applySpecToQuery(spec, action, topNiches, lowerNorm);
     const parts = [];
     if (stance)
       parts.push(stance);
-    if (action)
-      parts.push(action);
-    for (const n of topNiches)
+    if (actionOut)
+      parts.push(actionOut);
+    for (const n of nichesOut)
       parts.push(n);
     for (const e of entities)
       parts.push(e);
     for (const a of attrs.slice(0, 3))
       parts.push(a);
-    let finalOutput = parts.join(" ").trim();
+    const flags = this.computeFlags(text, parts);
+    const finalOutput = this.buildOpcode("V", {
+      stance,
+      tag: "",
+      action: actionOut,
+      goal: spec.goal,
+      cstr: spec.cstr,
+      proto: spec.proto,
+      niches: nichesOut,
+      entities,
+      attrs: attrs.slice(0, 3)
+    }, flags);
     if (!finalOutput)
       return { output: text, noiseRemoved: 0 };
-    finalOutput = this.constraintLayer(finalOutput, text, parts);
     const outputWordCount = finalOutput.split(/\s+/).length;
     const noise = originalWordCount > 0 ? Math.max(0, Math.floor((originalWordCount - outputWordCount) / originalWordCount * 100)) : 0;
     return { output: finalOutput, noiseRemoved: noise };
@@ -640,24 +709,282 @@ var PithEngine = class _PithEngine {
   // ═══════════════════════════════════════════════════
   // SHARED LAYERS
   // ═══════════════════════════════════════════════════
-  constraintLayer(finalText, originalText, parts) {
-    const constraints = [];
+  /** FNV-1a–style digest (8 hex) for ISA line integrity; same algorithm as append step. */
+  static isaCrc(baseWithoutCrc) {
+    let hash = 2166136261;
+    for (let i = 0; i < baseWithoutCrc.length; i++) {
+      hash ^= baseWithoutCrc.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    const hex = (hash >>> 0).toString(16).toUpperCase();
+    return hex.padStart(8, "0").slice(-8);
+  }
+  isaNorm(raw) {
+    return raw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }
+  mergeIsaSpecParts(chunks) {
+    const EMPTY = "_";
+    const goal = [...new Set(chunks.flatMap((c) => c.goal))].join("+") || EMPTY;
+    const cstr = [...new Set(chunks.flatMap((c) => c.cstr))].join("|") || EMPTY;
+    const proto = [...new Set(chunks.flatMap((c) => c.proto))].join("|") || EMPTY;
+    if (goal === EMPTY && cstr === EMPTY && proto === EMPTY) {
+      return { goal: EMPTY, cstr: EMPTY, proto: EMPTY };
+    }
+    return { goal, cstr, proto };
+  }
+  detectAssemblyIsaSpec(n) {
+    const goal = [];
+    const cstr = [];
+    const proto = [];
+    const hasAssembly = /\bassembly\b/.test(n);
+    const hasIa = /\b(ia|ai|llm)\b/.test(n);
+    const humanOut = /linguagem\s+humana/.test(n) && /resposta/.test(n) || /\b(s[oó]|somente|apenas)\s+na\s+resposta\b/.test(n) || /\bhuman\s+language\b/.test(n) && /\bresponse\b/.test(n) || /\bonly\s+in\s+(the\s+)?response\b/.test(n);
+    const asmIn = /\bvai\s+receber\s+apenas\b/.test(n) || /\b(receive|receber)\s+only\s+assembly\b/.test(n) || /\b(apenas|somente|only)\s+(o\s+)?assembly\b/.test(n) && /receber|receive|input|entrada/.test(n) || hasAssembly && /\b(apenas|somente|only)\b/.test(n) && /\b(receber|receive|entrada|input)\b/.test(n);
+    if (hasAssembly && hasIa)
+      goal.push("ASM_IA");
+    if (humanOut)
+      goal.push("HUMAN_OUT");
+    if (asmIn)
+      goal.push("ASM_IN");
+    if (asmIn || hasAssembly && /\b(apenas|somente|only)\b/.test(n) && /\b(receber|receive)\b/.test(n)) {
+      cstr.push("IN_ASM_ONLY");
+    }
+    if (humanOut)
+      cstr.push("OUT_HUMAN_ONLY");
+    if (asmIn || cstr.includes("IN_ASM_ONLY"))
+      proto.push("IN=ASM");
+    if (humanOut || cstr.includes("OUT_HUMAN_ONLY"))
+      proto.push("OUT=HUMAN");
+    return { goal, cstr, proto };
+  }
+  detectLearnIsaSpec(n) {
+    const goal = [];
+    const cstr = [];
+    const proto = [];
+    const hasMlCore = /\b(aprendizado de maquina|machine learning|ml)\b/.test(n) || /\b(aprendizado|learning)\b/.test(n) && /\b(maquina|machine)\b/.test(n);
+    const hasAutonomyIntent = /\b(evoluir sozinho|evolua sozinho)\b/.test(n) || /\b(autonomo|autonomous|self[-\s]?improve|self[-\s]?learning)\b/.test(n) || /\b(sozinho|sozinha|automatico|automaticamente)\b/.test(n) && /\b(evoluir|evolui|evolua|melhorar|consertar|corrigir)\b/.test(n);
+    const hasEngineContext = /\b(algoritmo|motor|engine|modelo|sistema|pith)\b/.test(n);
+    const hasSelfHeal = /\b(se\s+consert|auto[-\s]?corrig|self[-\s]?heal|auto[-\s]?melhor)\b/.test(n);
+    const strongPair = hasMlCore && hasAutonomyIntent;
+    const engineEvolves = hasEngineContext && hasAutonomyIntent && (hasMlCore || hasSelfHeal);
+    if (strongPair || engineEvolves) {
+      goal.push("SELF_IMPROVE");
+      cstr.push("SAFE_AUTONOMY");
+      proto.push("LEARN=ON");
+      proto.push("UPDATE=CONTROLLED");
+    }
+    return { goal, cstr, proto };
+  }
+  detectPromptIsaSpec(n) {
+    const goal = [];
+    const cstr = [];
+    const proto = [];
+    const hasPromptCore = /\b(prompt|prompts)\b/.test(n) || /\b(comando|instrucao|instrucoes)\b/.test(n);
+    const hasGenericCoverage = /\b(generico|gen[eé]rico|qualquer|any|todos os casos|all cases)\b/.test(n) && /\b(funcione|funcionar|robusto|robust|consistente|consistent)\b/.test(n);
+    if (hasPromptCore && hasGenericCoverage) {
+      goal.push("ROBUST_PROMPT");
+      cstr.push("GENERIC_COVERAGE");
+      proto.push("INPUT=ANY");
+      proto.push("OUTPUT=CONSISTENT");
+    }
+    return { goal, cstr, proto };
+  }
+  /** Product / protocol intent: merged detectores opt-in (assembly, learn, prompt). */
+  extractProductSpec(raw) {
+    const n = this.isaNorm(raw);
+    return this.mergeIsaSpecParts([
+      this.detectAssemblyIsaSpec(n),
+      this.detectLearnIsaSpec(n),
+      this.detectPromptIsaSpec(n)
+    ]);
+  }
+  /** Preenche ACT/N/A de forma genérica quando o scoring deixou slots vazios demais. */
+  patchGenericQueryInterpretation(lowerNorm, tag, actionOut, nichesOut, attrs) {
+    const action = actionOut || "";
+    let niches = [...nichesOut];
+    const attrsOut = [...attrs];
+    const tagVal = tag.replace(/[\[\]]/g, "");
+    const isExplanatory = tagVal === "ex";
+    const isQuestion = /\?/.test(lowerNorm) || /^(como|qual|quais|quem|onde|quando|por que|porque|o que|what|how|why|when|where)\b/.test(lowerNorm);
+    let nextAction = action;
+    if (isExplanatory && !nextAction.replace(/^!/, "")) {
+      nextAction = "!consultar";
+    }
+    const hasNiche = (w) => niches.some((n) => n.replace(/^#/, "").toLowerCase() === w);
+    const pushNiche = (w) => {
+      if (!hasNiche(w))
+        niches.push("#" + w);
+    };
+    if (!niches.length) {
+      if (/\btempo\b/.test(lowerNorm))
+        pushNiche("tempo");
+      else if (/\bclima\b/.test(lowerNorm))
+        pushNiche("clima");
+      else if (/\bweather\b/.test(lowerNorm))
+        pushNiche("weather");
+    }
+    if (!niches.length && (isExplanatory || isQuestion)) {
+      const m = lowerNorm.match(
+        /\b(?:como\s+(?:esta|está|ta|e)|qual\s+(?:e|é|seria)|o\s+que\s+(?:e|é))\s+(?:o\s+|a\s+)?([a-zà-öø-ÿ]{3,})\b/
+      );
+      if (m) {
+        const w = m[1];
+        const stop = /* @__PURE__ */ new Set([
+          "esta",
+          "est\xE1",
+          "esse",
+          "essa",
+          "isso",
+          "aquilo",
+          "coisa",
+          "situa",
+          "situacao"
+        ]);
+        if (!stop.has(w))
+          pushNiche(w);
+      }
+    }
+    const pushAttr = (w) => {
+      const key = w.toLowerCase();
+      if (!attrsOut.some((a) => a.replace(/^\?/, "").toLowerCase() === key))
+        attrsOut.push("?" + key);
+    };
+    if (/\bhoje\b|today\b/.test(lowerNorm))
+      pushAttr("hoje");
+    if (/\bagora\b|now\b/.test(lowerNorm))
+      pushAttr("agora");
+    if (/\b(amanha|amanhã|tomorrow)\b/.test(lowerNorm))
+      pushAttr("amanha");
+    return { action: nextAction, niches, attrs: attrsOut };
+  }
+  static SPEC_NICHE_STOP = /* @__PURE__ */ new Set([
+    "elogiam",
+    "elogio",
+    "ninguem",
+    "ningu\xE9m",
+    "sonhou",
+    "sonhar",
+    "todos",
+    "todas",
+    "maravilhosa",
+    "maravilhoso",
+    "engine",
+    "quero",
+    "queria",
+    "linguagem",
+    "resposta",
+    "humana",
+    "humano",
+    "receber",
+    "perfeito",
+    "agora",
+    "funcione",
+    "precisa",
+    "qualquer",
+    "generico",
+    "gen\xE9rico",
+    "prompt"
+  ]);
+  applySpecToQuery(spec, action, topNiches, lowerFull) {
+    const empty = spec.goal === "_" && spec.cstr === "_" && spec.proto === "_";
+    if (empty)
+      return { action, niches: topNiches };
+    const hasIn = spec.proto.includes("IN=ASM");
+    const hasOut = spec.proto.includes("OUT=HUMAN");
+    const hasLearn = spec.goal.includes("SELF_IMPROVE") || spec.proto.includes("LEARN=ON");
+    const hasPromptSpec = spec.goal.includes("ROBUST_PROMPT") || spec.proto.includes("INPUT=ANY");
+    let nextAction = action;
+    if (hasLearn)
+      nextAction = "![define|learning]";
+    else if (hasPromptSpec)
+      nextAction = "![define|prompt]";
+    else if (hasIn && hasOut)
+      nextAction = "![define|protocol]";
+    else if (hasIn)
+      nextAction = "!define_asm_in";
+    else if (hasOut)
+      nextAction = "!define_human_out";
+    else
+      nextAction = "!spec_product";
+    const filtered = topNiches.map((n) => n.replace(/^#/, "")).filter((w) => w && !_PithEngine.SPEC_NICHE_STOP.has(w.toLowerCase()));
+    const extra = [];
+    if (/\bassembly\b/.test(lowerFull) && !filtered.some((x) => x.toLowerCase() === "assembly")) {
+      extra.push("assembly");
+    }
+    if (hasLearn && !filtered.some((x) => x.toLowerCase() === "aprendizado")) {
+      extra.push("aprendizado");
+    }
+    if (hasLearn && !filtered.some((x) => x.toLowerCase() === "maquina")) {
+      extra.push("maquina");
+    }
+    if (hasPromptSpec && !filtered.some((x) => x.toLowerCase() === "algoritmo")) {
+      extra.push("algoritmo");
+    }
+    if (hasPromptSpec && !filtered.some((x) => x.toLowerCase() === "prompt")) {
+      extra.push("prompt");
+    }
+    const merged = [...extra, ...filtered];
+    const seen = /* @__PURE__ */ new Set();
+    const niches = [];
+    for (const w of merged) {
+      const k = w.toLowerCase();
+      if (seen.has(k))
+        continue;
+      seen.add(k);
+      niches.push("#" + w);
+      if (niches.length >= _PithEngine.MAX_QUERY_NICHES)
+        break;
+    }
+    return { action: nextAction, niches };
+  }
+  computeFlags(originalText, parts) {
+    const flags = [];
     const lowerOriginal = originalText.toLowerCase();
     const hasTag = (tag) => parts.some((p) => p === tag);
     if (hasTag("[fx]") || hasTag("[gen]") || /```/.test(originalText) || /\b(código|code|script|função|function|refactor)\b/.test(lowerOriginal)) {
-      constraints.push("!NoExplanations");
+      flags.push("NE");
     }
     if (/\b(liste|listar|list|lista)\b/.test(lowerOriginal)) {
-      constraints.push("!BulletsOnly");
+      flags.push("BL");
     }
     const origWords = originalText.split(/\s+/).length;
-    if (origWords < 15 && constraints.length === 0) {
-      constraints.push("!DirectAnswer");
+    if (origWords < 15 && flags.length === 0) {
+      flags.push("DT");
     }
-    if (constraints.length > 0) {
-      return finalText + "\n\n" + constraints.join(" ");
+    return flags;
+  }
+  buildOpcode(mode, data, flags) {
+    const EMPTY = "_";
+    const stance = data.stance ? data.stance.replace(/[\[\]]/g, "") : "";
+    const tag = data.tag ? data.tag.replace(/[\[\]]/g, "") : "";
+    const action = data.action ? data.action.replace(/^!/, "") : "";
+    const goal = data.goal && data.goal !== EMPTY ? data.goal : EMPTY;
+    const cstr = data.cstr && data.cstr !== EMPTY ? data.cstr : EMPTY;
+    const proto = data.proto && data.proto !== EMPTY ? data.proto : EMPTY;
+    const niches = data.niches && data.niches.length ? data.niches.map((n) => n.replace(/^#/, "")).filter(Boolean).join(",") : "";
+    const entities = data.entities && data.entities.length ? data.entities.map((e) => e.replace(/^@/, "")).filter(Boolean).join(",") : "";
+    const attrs = data.attrs && data.attrs.length ? data.attrs.map((a) => a.replace(/^\?/, "")).map((a) => a.replace(/^(\d+)[a-z]+$/i, "$1")).filter(Boolean).join(",") : "";
+    let payload = data.payload ? data.payload.replace(/\s+/g, " ").trim() : "";
+    if (payload.length > _PithEngine.MAX_PAYLOAD_CHARS) {
+      payload = payload.slice(0, _PithEngine.MAX_PAYLOAD_CHARS);
     }
-    return finalText;
+    const flagsOut = flags.length ? flags.join(",") : "";
+    const ordered = [
+      `M=${mode}`,
+      "IO=A2H",
+      `TAG=${tag || EMPTY}`,
+      `S=${stance || EMPTY}`,
+      `ACT=${action || EMPTY}`,
+      `GOAL=${goal}`,
+      `CSTR=${cstr}`,
+      `PROTO=${proto}`,
+      `N=${niches || EMPTY}`,
+      `E=${entities || EMPTY}`,
+      `A=${attrs || EMPTY}`,
+      `P=${payload || EMPTY}`,
+      `F=${flagsOut || EMPTY}`
+    ];
+    return ordered.join(" ");
   }
   humanNoiseLayer(text) {
     let r = text;
@@ -910,7 +1237,34 @@ function showBriefStatus(message, statusBar) {
   }, 2500);
 }
 function activate(context) {
-  const engine = new PithEngine();
+  const cfg = vscode.workspace.getConfiguration("pith");
+  const telemetryApiUrl = String(cfg.get("telemetryApiUrl") || "").trim();
+  const telemetryToken = String(cfg.get("telemetryToken") || "").trim();
+  const telemetryEnabled = Boolean(cfg.get("telemetryEnabled", false));
+  const engine = new PithEngine({
+    onOptimizeResult: (p) => {
+      if (!telemetryEnabled || !telemetryApiUrl || !telemetryToken)
+        return;
+      if (p.noiseRemoved < 5 || p.text.trim().length < 30)
+        return;
+      void fetch(`${telemetryApiUrl}/v1/ml/sample`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${telemetryToken}`
+        },
+        body: JSON.stringify({
+          text: p.text,
+          output: p.output,
+          noiseRemoved: p.noiseRemoved,
+          isQuery: p.isQuery,
+          includeInputForMl: false,
+          kind: p.kind
+        })
+      }).catch(() => {
+      });
+    }
+  });
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   context.subscriptions.push(statusBarItem);
   const runOptimize = async (copyOnly) => {

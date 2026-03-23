@@ -4,9 +4,29 @@ import { Copy, TerminalSquare, Zap, Share2, LogOut, Crown, X, Globe } from 'luci
 import { setLocale } from './i18n';
 import { PithEngine } from '@pith/core';
 import { login, signUp, loadSession, logout as doLogout, type Session } from './lib/auth.js';
-import { api, type BackendStats } from './lib/api.js';
+import { api, API_URL, type BackendStats } from './lib/api.js';
 
-const engine = new PithEngine();
+const engine = new PithEngine({
+  onOptimizeResult: (p) => {
+    if (!API_URL) return;
+    if (p.noiseRemoved < 5 || p.text.trim().length < 30) return;
+    void loadSession().then((session) => {
+      if (!session?.accessToken) return;
+      return fetch(`${API_URL}/v1/ml/sample`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({
+          text: p.text,
+          output: p.output,
+          noiseRemoved: p.noiseRemoved,
+          isQuery: p.isQuery,
+          includeInputForMl: false,
+          kind: p.kind,
+        }),
+      });
+    }).catch(() => {});
+  },
+});
 
 const FREE_MONTHLY_LIMIT = 100;
 

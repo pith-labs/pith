@@ -7,6 +7,7 @@ import { statsRouter } from './routes/stats.js';
 import { userRouter } from './routes/user.js';
 import { licenseRouter } from './routes/license.js';
 import { mlRouter } from './routes/ml.js';
+import { startMlCron } from './jobs/mlCron.js';
 
 const app = new Hono();
 
@@ -32,6 +33,8 @@ app.notFound((c) => c.json({ error: 'Not found' }, 404));
 
 const port = parseInt(process.env.PORT ?? '3001');
 console.log(`[PITH API] Running on http://localhost:${port}`);
+
+startMlCron();
 
 serve({ fetch: app.fetch, port });
 
