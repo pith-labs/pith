@@ -6,6 +6,7 @@ import {
   Zap, TerminalSquare, Crown, LogOut, Copy, Share2,
   BarChart2, Key, ChevronRight, RefreshCw
 } from 'lucide-react';
+import { api } from '../lib/api';
 import { PithEngine } from '@pith/core';
 import { useTranslation } from 'react-i18next';
 
@@ -20,6 +21,9 @@ export default function DashboardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [apiKeyCopied, setApiKeyCopied] = useState(false);
+  const [revealedKey, setRevealedKey] = useState<string | null>(null);
+  const [keyLoading, setKeyLoading] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
 
   // Quick distiller
   const [input, setInput] = useState('');
@@ -55,11 +59,26 @@ export default function DashboardPage() {
     setTimeout(() => setShareCopied(false), 2000);
   };
 
-  const handleCopyApiKey = () => {
-    if (!profile?.apiKey) return;
-    navigator.clipboard.writeText(profile.apiKey);
+  const handleCopyRevealedKey = () => {
+    if (!revealedKey) return;
+    navigator.clipboard.writeText(revealedKey);
     setApiKeyCopied(true);
     setTimeout(() => setApiKeyCopied(false), 2000);
+  };
+
+  const handleCreateOrRotateApiKey = async () => {
+    if (!session?.accessToken) return;
+    setKeyError(null);
+    setKeyLoading(true);
+    try {
+      const { key } = await api.createApiKey(session.accessToken);
+      setRevealedKey(key);
+      await refresh();
+    } catch (e) {
+      setKeyError(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setKeyLoading(false);
+    }
   };
 
   if (!session) {
@@ -250,25 +269,62 @@ export default function DashboardPage() {
               {t('dashboard.api_key.title')}
             </h2>
 
-            {profile?.apiKey ? (
+            {keyError && (
+              <div className="mb-3 text-sm text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+                {keyError}
+              </div>
+            )}
+
+            {revealedKey && (
               <>
-                <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 font-mono text-xs text-slate-400 break-all mb-3">
-                  {profile.apiKey}
+                <p className="text-amber-400/90 text-xs mb-2">{t('dashboard.api_key.save_once')}</p>
+                <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 font-mono text-xs text-emerald-400/90 break-all mb-3">
+                  {revealedKey}
                 </div>
                 <button
-                  onClick={handleCopyApiKey}
-                  className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                  type="button"
+                  onClick={handleCopyRevealedKey}
+                  className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-colors flex items-center justify-center gap-2 mb-3"
                 >
                   <Copy size={14} />
                   {apiKeyCopied ? t('dashboard.usage.copied') : t('dashboard.api_key.copy_btn')}
                 </button>
               </>
+            )}
+
+            {isPro ? (
+              <>
+                {profile?.hasApiKey && !revealedKey && (
+                  <p className="text-slate-500 text-sm mb-3">{t('dashboard.api_key.active_hint')}</p>
+                )}
+                {!profile?.hasApiKey && !revealedKey && (
+                  <p className="text-slate-500 text-sm mb-3">{t('dashboard.api_key.empty_1')}</p>
+                )}
+                <button
+                  type="button"
+                  onClick={handleCreateOrRotateApiKey}
+                  disabled={keyLoading}
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 text-sm font-bold transition-colors"
+                >
+                  {keyLoading
+                    ? t('dashboard.api_key.generating')
+                    : profile?.hasApiKey
+                      ? t('dashboard.api_key.rotate_btn')
+                      : t('dashboard.api_key.generate_btn')}
+                </button>
+              </>
             ) : (
               <div className="text-slate-500 text-sm">
                 <p className="mb-3">{t('dashboard.api_key.empty_1')}</p>
-                {!isPro && (
-                  <p className="text-xs text-amber-400/80">{t('dashboard.api_key.empty_2')}</p>
-                )}
+                <p className="text-xs text-amber-400/80 mb-4">{t('dashboard.api_key.empty_2')}</p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/#pricing')}
+                  className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                >
+                  <Crown size={14} />
+                  {t('dashboard.usage.upgrade_btn')}
+                </button>
               </div>
             )}
           </div>

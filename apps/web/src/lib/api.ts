@@ -28,14 +28,17 @@ export interface BackendStats {
 }
 
 export interface UserProfile {
-  id:     string;
-  tier:   'free' | 'pro';
-  apiKey: string | null;
+  id:          string;
+  tier:        'free' | 'pro';
+  hasApiKey:   boolean;
+  apiKeyName:  string | null;
 }
 
 export const api = {
   stats:     (token: string) => request<BackendStats>('/v1/stats', token),
   user:      (token: string) => request<UserProfile>('/v1/user', token),
+  createApiKey: (token: string) =>
+    request<{ key: string }>('/v1/user/api-key', token, { method: 'POST' }),
   syncLocal: (token: string, tokensSaved: number) =>
     request<{ synced: boolean }>('/v1/user/sync', token, {
       method: 'PATCH',

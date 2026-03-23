@@ -28,9 +28,10 @@ export interface BackendStats {
 }
 
 export interface UserProfile {
-  id:     string;
-  tier:   'free' | 'pro';
-  apiKey: string | null;
+  id:         string;
+  tier:       'free' | 'pro';
+  hasApiKey:  boolean;
+  apiKeyName: string | null;
 }
 
 export const api = {

@@ -114,8 +114,13 @@
     "api_key": {
       "title": "Clave API",
       "copy_btn": "Copiar clave",
-      "empty_1": "Tu clave API aparecerá aquí después del registro.",
-      "empty_2": "El acceso a la API requiere un plan PRO."
+      "empty_1": "Usa una clave secreta para llamar a la API de PITH desde tu backend.",
+      "empty_2": "Las claves API están disponibles en el plan PRO.",
+      "generate_btn": "Generar clave API",
+      "rotate_btn": "Rotar clave API",
+      "generating": "Generando…",
+      "active_hint": "Ya hay una clave en tu cuenta. El secreto solo se muestra una vez al crearla — rota para emitir otra.",
+      "save_once": "Cópiala ahora — no se volverá a mostrar."
     },
     "account": {
       "title": "Cuenta",

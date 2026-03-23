@@ -114,8 +114,13 @@
     "api_key": {
       "title": "API Key",
       "copy_btn": "Copy key",
-      "empty_1": "Your API key will appear here after registration.",
-      "empty_2": "API access requires a PRO plan."
+      "empty_1": "Use a secret key to call the PITH API from your backend.",
+      "empty_2": "API keys are available on the PRO plan.",
+      "generate_btn": "Generate API key",
+      "rotate_btn": "Rotate API key",
+      "generating": "Generating…",
+      "active_hint": "A key is stored for your account. Secrets are shown only once when created—rotate to issue a new one.",
+      "save_once": "Copy this key now — it will not be shown again."
     },
     "account": {
       "title": "Account",
