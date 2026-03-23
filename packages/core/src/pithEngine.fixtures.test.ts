@@ -53,6 +53,24 @@ const cases: Case[] = [
     },
   },
   {
+    name: 'Compress PT: símbolo + (ex-e) sobrevive ao filtro',
+    input: ['a', 'b', 'c', 'Consolidar o fechamento contratual e os pré-requisitos operacionais.'].join('\n'),
+    assert: o => {
+      assert.match(o, /^M=C /);
+      assert.match(o, /contratual \+ os/);
+    },
+  },
+  {
+    name: 'Compress PT: cópula é não mutila técnica/critérios',
+    input: ['Contexto', '', 'A implementação técnica não consegue avançar; os critérios de rollout são claros.', 'Mais linha', 'Outra'].join(
+      '\n'
+    ),
+    assert: o => {
+      assert.match(o, /^M=C /);
+      assert.doesNotMatch(o, /t=cnica|crit=rios/);
+    },
+  },
+  {
     name: 'Bloco código → F inclui NE',
     input: 'const f = (x) => { return x + 1; };',
     assert: o => {
@@ -141,6 +159,21 @@ const cases: Case[] = [
     input:
       'Caso houvesse maior zelo na aplicação dos conectivos lógicos, a fluidez do argumento seria preservada, impedindo que a fragmentação das ideias comprometesse a integridade estrutural do texto.',
     assert: o => assert.match(o, /\bACT=impedindo\b/),
+  },
+  {
+    name: 'PT condicional -iam vs substantivo (edital)',
+    input:
+      'Caso os proponentes do projeto tivessem atentado para as minúcias do edital, teriam percebido que a conformidade com as normas técnicas é o pressuposto sine qua non para a viabilidade de qualquer empreendimento de tal magnitude.',
+    assert: o => assert.match(o, /\bACT=teriam\b/),
+  },
+  {
+    name: 'PT bioma → verbo (abrange), cultural em A',
+    input:
+      'A preservação do bioma amazônico não se restringe à manutenção da flora, mas abrange a salvaguarda da diversidade cultural das populações tradicionais, cujos conhecimentos ancestrais são pilares para a sustentabilidade global.',
+    assert: o => {
+      assert.match(o, /\bACT=abrange\b/);
+      assert.match(o, /\bA=.*cultural\b/);
+    },
   },
 ];
 

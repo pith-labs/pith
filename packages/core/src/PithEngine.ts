@@ -89,17 +89,30 @@ export class PithEngine {
   ]);
 
   // Scoring thresholds
-  private static readonly QUERY_THRESHOLD = 6;
+  private static readonly QUERY_THRESHOLD = 5;
   private static readonly COMPRESS_THRESHOLD = 4;
   private static readonly MAX_QUERY_NICHES = 4;
-  private static readonly MAX_PAYLOAD_CHARS = 256;
+
+  /** Cópulas PT como token isolado — JS `\b` não trata letras acentuadas como `\w` (evita `técnica`→`t=cnica`). */
+  private static readonly COPULA_PT_RE =
+    /(?<![\p{L}\p{M}\p{N}])(é|são|está|estão|era|eram)(?![\p{L}\p{M}\p{N}])/giu;
+
+  /** Símbolos da `patternLayer` (sem letras → `wClean` vazio); não podem ser descartados no scoreFilter. */
+  private static isPatternSymbolToken(w: string): boolean {
+    const t = w.trim();
+    if (!t || t.includes('\u0000')) return false;
+    return /^[+\-|=<>→]+$/.test(t);
+  }
+
+  /** Alterna ~ no termo seguinte; exclui sem/without — "sem ambiguidade" não é ~ambiguidade */
+  private static readonly NEGATION_TOGGLE_WORD_RE = /^(não|nao|not|never|nem)$/i;
 
   // Morphological patterns (algorithmic, not word lists)
   // Adjective/determiner suffixes — Latin-derived morphological patterns, never verb roots
   // -ular/-olar/-lear: celular, solar, nuclear, linear, popular, molecular, circular
   // -quer/-quier: qualquer, quaisquer (PT), cualquier (ES) — grammaticalized determiners
   // -ico/-ica: genérico, histórico, dinâmico, automático, específico, público, único, lógico
-  private static readonly ADJECTIVE_SUFFIX = /(?:ário|ária|oso|osa|ivo|iva|ável|ível|inho|inha|ante|ente|udo|uda|ário|ária|ary|ous|ive|able|ible|ful|less|ical|ial|ular|olar|lear|quer|quier|ico|ica)$/i;
+  private static readonly ADJECTIVE_SUFFIX = /(?:ário|ária|oso|osa|ivo|iva|ável|ível|inho|inha|ante|ente|udo|uda|ário|ária|ary|ous|ive|able|ible|ful|less|ical|ial|ular|ural|olar|lear|quer|quier|ico|ica)$/i;
   private static readonly VERB_INFINITIVE = /[aei]r$/i;
   private static readonly VERB_CONJUGATED = /(?:[aei]ndo|[aei]ram|[aei]va[ms]?|[aei]rá|[aei]rão|[aei]sse[ms]?|[aei]mos|[aei]reis)$/i;
 
@@ -144,6 +157,17 @@ export class PithEngine {
     );
   }
 
+  /** Superfície de verbo finito (PT), só morfologia; evita substantivo quando há condicional em -iam. */
+  private static isFiniteVerbSurfaceCandidate(word: string): boolean {
+    const lower = word.toLowerCase();
+    if (word.length < 5 || word.length > 24) return false;
+    if (word.startsWith('~') || /\d/.test(word) || /^[A-Z]/.test(word)) return false;
+    if (PithEngine.ADJECTIVE_SUFFIX.test(lower)) return false;
+    if (PithEngine.isNominalLikelyShape(lower)) return false;
+    if (/iam$/i.test(lower)) return true;
+    return false;
+  }
+
   /** Substantivo provável só por sufixo / plurais (sem léxico). */
   private static isNominalLikelyShape(lower: string): boolean {
     if (lower.length < 4) return false;
@@ -161,6 +185,13 @@ export class PithEngine {
     if (lower.length >= 8 && /(?:ais|eis)$/i.test(lower)) return true;
     if (lower.length >= 6 && /(?:nces|sses|oses|ises)$/i.test(lower)) return true;
     if (lower.length >= 7 && /ores$/i.test(lower)) return true;
+    if (lower.length >= 8 && /entes$/i.test(lower)) return true;
+    if (lower.length >= 10 && /guarda$/i.test(lower)) return true;
+    if (lower.length >= 7 && /eito$/i.test(lower)) return true;
+    if (lower.length >= 6 && /(?:ado|ido)$/i.test(lower)) return true;
+    if (lower.length >= 8 && /osto$/i.test(lower)) return true;
+    if (lower.length >= 6 && /ude$/i.test(lower)) return true;
+    if (lower.length >= 7 && /eto$/i.test(lower)) return true;
     return false;
   }
 
@@ -188,7 +219,8 @@ export class PithEngine {
     });
     const inf = fused.filter(item => PithEngine.isInfinitiveCandidate(item.word)).map(weigh);
     const ger = fused.filter(item => PithEngine.isGerundCandidate(item.word)).map(weigh);
-    const merged = [...inf, ...ger].sort((a, b) => b.score - a.score);
+    const fin = fused.filter(item => PithEngine.isFiniteVerbSurfaceCandidate(item.word)).map(weigh);
+    const merged = [...inf, ...ger, ...fin].sort((a, b) => b.score - a.score);
     const seen = new Set<string>();
     const dedup: typeof merged = [];
     for (const x of merged) {
@@ -209,10 +241,6 @@ export class PithEngine {
       if (PithEngine.ADJECTIVE_SUFFIX.test(k)) continue;
       if (PithEngine.isNominalLikelyShape(k)) continue;
       return { action: '!' + item.word, actionKeys: new Set([k]) };
-    }
-    if (fused.length) {
-      const fw = fused[0].word;
-      return { action: '!' + fw, actionKeys: new Set([fw.toLowerCase()]) };
     }
     return { action: '', actionKeys: new Set() };
   }
@@ -317,9 +345,12 @@ export class PithEngine {
     }
 
     // 3. Frequency penalty — ubiquitous words are likely structural filler
+    // Não penalizar início de oração curto: "Com", "Por" somam TF como "com"/"por" no texto
     if (totalWords > 30) {
       const ratio = (freq.get(clean.toLowerCase()) || 0) / totalWords;
-      if (ratio > 0.02) score -= Math.min(Math.floor(ratio * 60), 6);
+      if (ratio > 0.02 && !(isSentenceStart && isFirstInLine && clean.length <= 5)) {
+        score -= Math.min(Math.floor(ratio * 60), 6);
+      }
     }
 
     // 4. Verb penalty — only conjugated forms (auxiliary/filler): -3
@@ -329,6 +360,11 @@ export class PithEngine {
 
     // 5. Position bonus — first word in a line is often key context
     if (isFirstInLine && !isSentenceStart) score += 2;
+
+    // 6. Início de oração na linha — curtas mas funcionais (PT "Com", "As"; EN "Yet")
+    if (isSentenceStart && isFirstInLine && clean.length >= 2 && clean.length <= 6) {
+      score += 2;
+    }
 
     return score;
   }
@@ -407,7 +443,6 @@ export class PithEngine {
       'semanas': 'w', 'semana': 'w', 'weeks': 'w', 'week': 'w',
     };
     const skipIndices = new Set<number>();
-    const negationRegex = /^(não|nao|not|never|sem|without|nem)$/i;
     let negateNext = false;
     const isQuestion = workText.endsWith('?');
 
@@ -419,7 +454,7 @@ export class PithEngine {
 
       // Intent trigger words: short ones score below threshold naturally;
       // long content verbs (e.g. "melhorar", "corrigir") survive and become !action
-      if (negationRegex.test(clean)) {
+      if (PithEngine.NEGATION_TOGGLE_WORD_RE.test(clean)) {
         negateNext = !negateNext;
         continue;
       }
@@ -510,9 +545,12 @@ export class PithEngine {
       // Skip words already selected as action
       if (actionKeys.has(key)) continue;
 
-      // First lowercase survivor → !action (fallback if no infinitive found), rest → #niche
       if (!action) {
-        action = '!' + item.word;
+        if (!PithEngine.isNominalLikelyShape(key)) {
+          action = '!' + item.word;
+        } else {
+          niches.push({ word: '#' + item.word, score: item.score });
+        }
       } else {
         niches.push({ word: '#' + item.word, score: item.score });
       }
@@ -634,8 +672,15 @@ export class PithEngine {
       if (PithEngine.ADJECTIVE_SUFFIX.test(key)) { attrs.push('?' + key); continue; }
       if (/^[A-Z]/.test(item.word)) { entities.push('@' + item.word); continue; }
       if (actionKeys.has(key)) continue;
-      if (!action) action = '!' + item.word;
-      else niches.push({ word: '#' + item.word, score: item.score });
+      if (!action) {
+        if (!PithEngine.isNominalLikelyShape(key)) {
+          action = '!' + item.word;
+        } else {
+          niches.push({ word: '#' + item.word, score: item.score });
+        }
+      } else {
+        niches.push({ word: '#' + item.word, score: item.score });
+      }
     }
 
     const topNiches = niches
@@ -754,10 +799,7 @@ export class PithEngine {
         .join(',')
       : '';
 
-    let payload = data.payload ? data.payload.replace(/\s+/g, ' ').trim() : '';
-    if (payload.length > PithEngine.MAX_PAYLOAD_CHARS) {
-      payload = payload.slice(0, PithEngine.MAX_PAYLOAD_CHARS);
-    }
+    const payload = data.payload ? data.payload.replace(/\s+/g, ' ').trim() : '';
 
     const flagsOut = flags.length ? flags.join(',') : '';
 
@@ -897,7 +939,7 @@ export class PithEngine {
 
     // Copulas → =
     r = r.replace(/\b(is|are|was|were)\b/gi, '=');
-    r = r.replace(/\b(é|são|está|estão|era|eram)\b/gi, '=');
+    r = r.replace(PithEngine.COPULA_PT_RE, '=');
 
     // Reference pattern: "just as we have for X and Y" → $X,$Y
     r = r.replace(/[Jj]ust as we have for\s+(\w+)\s+and\s+(\w+)/g, (_m, a, b) => `$${a},$${b}`);
@@ -922,8 +964,6 @@ export class PithEngine {
     const result: string[] = [];
 
     const isQuestionLine = (line: string) => line.trim().endsWith('?');
-    const negationRegex = /^(não|nao|not|never|sem|without|nem)$/i;
-
     for (const line of lines) {
       const trimmed = line.trim();
 
@@ -958,8 +998,11 @@ export class PithEngine {
         const rawScores: (number | null)[] = words.map((w, i) => {
           if (w.includes('\u0000')) return Infinity;
           const wClean = w.replace(/[^a-zA-ZÀ-ÿ0-9-]/g, '');
-          if (!wClean) return null;
-          if (negationRegex.test(wClean)) return null;
+          if (!wClean) {
+            if (PithEngine.isPatternSymbolToken(w)) return Infinity;
+            return null;
+          }
+          if (PithEngine.NEGATION_TOGGLE_WORD_RE.test(wClean)) return null;
           const isSentStart = lineStarts.has(i);
           return this.scoreWord(w, freq, totalWords, i === 0 && !marker, isSentStart, isQuestion);
         });
@@ -968,10 +1011,20 @@ export class PithEngine {
         // This preserves compound technical tokens (e.g. "API key", "rate limit") without hardcoding
         const boosted: (number | null)[] = rawScores.map((s, i) => {
           if (s === null || s === Infinity || s >= threshold) return s;
-          const prev = rawScores[i - 1] ?? null;
-          const next = rawScores[i + 1] ?? null;
-          const neighborMax = Math.max(prev ?? -Infinity, next ?? -Infinity);
-          if (neighborMax >= threshold + 2) return s + 3;
+          const wClean = words[i].replace(/[^a-zA-ZÀ-ÿ0-9-]/g, '');
+          const prev = rawScores[i - 1];
+          const next = rawScores[i + 1];
+          const prevOk = typeof prev === 'number' && prev >= threshold;
+          const nextOk = typeof next === 'number' && next >= threshold;
+          // Ponte entre dois termos fortes: "fluxo de envio", "passam a ser" (só forma, sem léxico)
+          if (wClean.length >= 1 && wClean.length <= 3 && prevOk && nextOk) {
+            return Math.max(s ?? 0, threshold);
+          }
+          const neighborMax = Math.max(
+            typeof prev === 'number' ? prev : -Infinity,
+            typeof next === 'number' ? next : -Infinity
+          );
+          if (neighborMax >= threshold + 2) return (s ?? 0) + 3;
           return s;
         });
 
@@ -987,8 +1040,15 @@ export class PithEngine {
             continue;
           }
           const wClean = w.replace(/[^a-zA-ZÀ-ÿ0-9-]/g, '');
-          if (!wClean) continue;
-          if (negationRegex.test(wClean)) {
+          if (!wClean) {
+            if (PithEngine.isPatternSymbolToken(w)) {
+              // Cópula (=) após "não" — não prefixar ~ (evita "~=" ilegível)
+              kept.push(w);
+              negateNext = false;
+            }
+            continue;
+          }
+          if (PithEngine.NEGATION_TOGGLE_WORD_RE.test(wClean)) {
             negateNext = !negateNext;
             continue;
           }

@@ -41,96 +41,6 @@ var PithEngine = class _PithEngine {
   // ═══════════════════════════════════════════════════
   // MINIMAL CONFIG (domain config, not language data)
   // ═══════════════════════════════════════════════════
-  // Intent tags for query symbolic mode (PT, EN, ES, FR, DE)
-  static INTENT_TAGS = /* @__PURE__ */ new Map([
-    // PT
-    ["como", "ex"],
-    ["explicar", "ex"],
-    ["explique", "ex"],
-    ["analisar", "an"],
-    ["mostrar", "an"],
-    ["otimizar", "op"],
-    ["melhorar", "op"],
-    ["ideia", "id"],
-    ["dicas", "id"],
-    ["criar", "gen"],
-    ["gerar", "gen"],
-    ["corrigir", "fx"],
-    ["erro", "fx"],
-    ["resumir", "sm"],
-    ["tarefa", "tk"],
-    ["estudar", "st"],
-    ["plano", "st"],
-    // EN
-    ["how", "ex"],
-    ["explain", "ex"],
-    ["what", "ex"],
-    ["analyze", "an"],
-    ["optimize", "op"],
-    ["improve", "op"],
-    ["idea", "id"],
-    ["suggest", "id"],
-    ["create", "gen"],
-    ["generate", "gen"],
-    ["fix", "fx"],
-    ["bug", "fx"],
-    ["summarize", "sm"],
-    ["task", "tk"],
-    ["learn", "st"],
-    // ES (Spanish)
-    ["c\xF3mo", "ex"],
-    ["explicar", "ex"],
-    ["explica", "ex"],
-    ["qu\xE9", "ex"],
-    ["analizar", "an"],
-    ["analisa", "an"],
-    ["optimizar", "op"],
-    ["mejorar", "op"],
-    ["idea", "id"],
-    ["sugerir", "id"],
-    ["crear", "gen"],
-    ["generar", "gen"],
-    ["corregir", "fx"],
-    ["error", "fx"],
-    ["resumir", "sm"],
-    ["tarea", "tk"],
-    ["aprender", "st"],
-    ["plan", "st"],
-    // FR (French)
-    ["comment", "ex"],
-    ["expliquer", "ex"],
-    ["explique", "ex"],
-    ["quoi", "ex"],
-    ["analyser", "an"],
-    ["optimiser", "op"],
-    ["am\xE9liorer", "op"],
-    ["id\xE9e", "id"],
-    ["sugg\xE9rer", "id"],
-    ["cr\xE9er", "gen"],
-    ["g\xE9n\xE9rer", "gen"],
-    ["corriger", "fx"],
-    ["erreur", "fx"],
-    ["r\xE9sumer", "sm"],
-    ["t\xE2che", "tk"],
-    ["apprendre", "st"],
-    // DE (German)
-    ["wie", "ex"],
-    ["erkl\xE4ren", "ex"],
-    ["erkl\xE4re", "ex"],
-    ["was", "ex"],
-    ["analysieren", "an"],
-    ["optimieren", "op"],
-    ["verbessern", "op"],
-    ["idee", "id"],
-    ["vorschlagen", "id"],
-    ["erstellen", "gen"],
-    ["generieren", "gen"],
-    ["korrigieren", "fx"],
-    ["fehler", "fx"],
-    ["zusammenfassen", "sm"],
-    ["aufgabe", "tk"],
-    ["lernen", "st"]
-  ]);
   // Compact abbreviations for long words (PT, EN, ES, FR, DE)
   static ABBREV = /* @__PURE__ */ new Map([
     // PT
@@ -238,18 +148,150 @@ var PithEngine = class _PithEngine {
     ["verf\xFCgbar", "avail"]
   ]);
   // Scoring thresholds
-  static QUERY_THRESHOLD = 6;
+  static QUERY_THRESHOLD = 5;
   static COMPRESS_THRESHOLD = 4;
   static MAX_QUERY_NICHES = 4;
-  static MAX_PAYLOAD_CHARS = 256;
+  /** Cópulas PT como token isolado — JS `\b` não trata letras acentuadas como `\w` (evita `técnica`→`t=cnica`). */
+  static COPULA_PT_RE = /(?<![\p{L}\p{M}\p{N}])(é|são|está|estão|era|eram)(?![\p{L}\p{M}\p{N}])/giu;
+  /** Símbolos da `patternLayer` (sem letras → `wClean` vazio); não podem ser descartados no scoreFilter. */
+  static isPatternSymbolToken(w) {
+    const t = w.trim();
+    if (!t || t.includes("\0"))
+      return false;
+    return /^[+\-|=<>→]+$/.test(t);
+  }
+  /** Alterna ~ no termo seguinte; exclui sem/without — "sem ambiguidade" não é ~ambiguidade */
+  static NEGATION_TOGGLE_WORD_RE = /^(não|nao|not|never|nem)$/i;
   // Morphological patterns (algorithmic, not word lists)
   // Adjective/determiner suffixes — Latin-derived morphological patterns, never verb roots
   // -ular/-olar/-lear: celular, solar, nuclear, linear, popular, molecular, circular
   // -quer/-quier: qualquer, quaisquer (PT), cualquier (ES) — grammaticalized determiners
   // -ico/-ica: genérico, histórico, dinâmico, automático, específico, público, único, lógico
-  static ADJECTIVE_SUFFIX = /(?:ário|ária|oso|osa|ivo|iva|ável|ível|inho|inha|ante|ente|udo|uda|ário|ária|ary|ous|ive|able|ible|ful|less|ical|ial|ular|olar|lear|quer|quier|ico|ica)$/i;
+  static ADJECTIVE_SUFFIX = /(?:ário|ária|oso|osa|ivo|iva|ável|ível|inho|inha|ante|ente|udo|uda|ário|ária|ary|ous|ive|able|ible|ful|less|ical|ial|ular|ural|olar|lear|quer|quier|ico|ica)$/i;
   static VERB_INFINITIVE = /[aei]r$/i;
   static VERB_CONJUGATED = /(?:[aei]ndo|[aei]ram|[aei]va[ms]?|[aei]rá|[aei]rão|[aei]sse[ms]?|[aei]mos|[aei]reis)$/i;
+  /** Terminações de infinitivo (romance); exclui adjetivos e falsos -er ingleses por forma. */
+  static isRomanceInfinitiveShape(lower) {
+    if (lower.length < 2 || lower.length > 24)
+      return false;
+    if (_PithEngine.ADJECTIVE_SUFFIX.test(lower))
+      return false;
+    if (lower.length > 3 && lower.endsWith("ver"))
+      return false;
+    if (/(?:ar|ir)$/i.test(lower))
+      return true;
+    if (!/er$/i.test(lower))
+      return false;
+    if (lower.length <= 4)
+      return true;
+    if (lower.length <= 18 && /^[bcdfghjklmnpqrstvwxz]/.test(lower))
+      return true;
+    return false;
+  }
+  static isInfinitiveCandidate(word) {
+    const lower = word.toLowerCase();
+    return word.length >= 3 && word.length <= 24 && !word.startsWith("~") && !/\d/.test(word) && !/^[A-Z]/.test(word) && !_PithEngine.ADJECTIVE_SUFFIX.test(lower) && _PithEngine.VERB_INFINITIVE.test(lower) && _PithEngine.isRomanceInfinitiveShape(lower);
+  }
+  /** Gerúndio romance (-ando/-endo/-indo); sem lista de verbos. */
+  static isGerundCandidate(word) {
+    const lower = word.toLowerCase();
+    return word.length >= 5 && word.length <= 24 && !word.startsWith("~") && !/\d/.test(word) && !/^[A-Z]/.test(word) && !_PithEngine.ADJECTIVE_SUFFIX.test(lower) && /(?:ando|endo|indo)$/i.test(lower);
+  }
+  /** Superfície de verbo finito (PT), só morfologia; evita substantivo quando há condicional em -iam. */
+  static isFiniteVerbSurfaceCandidate(word) {
+    const lower = word.toLowerCase();
+    if (word.length < 5 || word.length > 24)
+      return false;
+    if (word.startsWith("~") || /\d/.test(word) || /^[A-Z]/.test(word))
+      return false;
+    if (_PithEngine.ADJECTIVE_SUFFIX.test(lower))
+      return false;
+    if (_PithEngine.isNominalLikelyShape(lower))
+      return false;
+    if (/iam$/i.test(lower))
+      return true;
+    return false;
+  }
+  /** Substantivo provável só por sufixo / plurais (sem léxico). */
+  static isNominalLikelyShape(lower) {
+    if (lower.length < 4)
+      return false;
+    if (/(?:ção|ções|dade|idade|ismo|ismos|mento|mentos|ncia|ncias|ência|ências|agem|agens|eza|ezas|ura|uras|ice|ices|ise|ises|oma|omas|ema|emas)$/i.test(
+      lower
+    )) {
+      return true;
+    }
+    if (lower.length >= 5 && /(?:ão|ões)$/i.test(lower))
+      return true;
+    if (lower.length >= 6 && /(?:os|as)$/i.test(lower) && !/(?:ando|endo|indo)$/i.test(lower)) {
+      return true;
+    }
+    if (lower.length >= 8 && /(?:ais|eis)$/i.test(lower))
+      return true;
+    if (lower.length >= 6 && /(?:nces|sses|oses|ises)$/i.test(lower))
+      return true;
+    if (lower.length >= 7 && /ores$/i.test(lower))
+      return true;
+    if (lower.length >= 8 && /entes$/i.test(lower))
+      return true;
+    if (lower.length >= 10 && /guarda$/i.test(lower))
+      return true;
+    if (lower.length >= 7 && /eito$/i.test(lower))
+      return true;
+    if (lower.length >= 6 && /(?:ado|ido)$/i.test(lower))
+      return true;
+    if (lower.length >= 8 && /osto$/i.test(lower))
+      return true;
+    if (lower.length >= 6 && /ude$/i.test(lower))
+      return true;
+    if (lower.length >= 7 && /eto$/i.test(lower))
+      return true;
+    return false;
+  }
+  /** Peso intratextual (sem léxico): raridade local ≈ log(N/(tf+1)) — mesmo idioma/frase. */
+  static weightInfinitiveAction(baseScore, word, freq, totalWords) {
+    const key = word.toLowerCase();
+    const tf = freq.get(key) ?? 0;
+    const idf = Math.log1p(totalWords / (tf + 1));
+    return baseScore * (1 + 0.35 * idf);
+  }
+  static pickVerbalAction(fused, freq, totalWords) {
+    const weigh = (item) => ({
+      ...item,
+      score: _PithEngine.weightInfinitiveAction(item.score, item.word, freq, totalWords)
+    });
+    const inf = fused.filter((item) => _PithEngine.isInfinitiveCandidate(item.word)).map(weigh);
+    const ger = fused.filter((item) => _PithEngine.isGerundCandidate(item.word)).map(weigh);
+    const fin = fused.filter((item) => _PithEngine.isFiniteVerbSurfaceCandidate(item.word)).map(weigh);
+    const merged = [...inf, ...ger, ...fin].sort((a, b) => b.score - a.score);
+    const seen = /* @__PURE__ */ new Set();
+    const dedup = [];
+    for (const x of merged) {
+      const k = x.word.toLowerCase();
+      if (seen.has(k))
+        continue;
+      seen.add(k);
+      dedup.push(x);
+    }
+    if (dedup.length) {
+      const top = dedup[0].word;
+      return { action: "!" + top, actionKeys: /* @__PURE__ */ new Set([top.toLowerCase()]) };
+    }
+    const sorted = [...fused].sort((a, b) => b.score - a.score);
+    for (const item of sorted) {
+      const k = item.word.toLowerCase();
+      if (item.word.startsWith("~") || /\d/.test(item.word))
+        continue;
+      if (/^[A-Z]/.test(item.word))
+        continue;
+      if (_PithEngine.ADJECTIVE_SUFFIX.test(k))
+        continue;
+      if (_PithEngine.isNominalLikelyShape(k))
+        continue;
+      return { action: "!" + item.word, actionKeys: /* @__PURE__ */ new Set([k]) };
+    }
+    return { action: "", actionKeys: /* @__PURE__ */ new Set() };
+  }
   // ═══════════════════════════════════════════════════
   // PUBLIC API
   // ═══════════════════════════════════════════════════
@@ -285,12 +327,10 @@ var PithEngine = class _PithEngine {
       return "conversational";
     return "query";
   }
-  // Conversational signals (pattern-based, no word lists):
-  // ≥2 question marks, OR question + personal pronoun + multiple sentences
+  // Conversational: só sinal estrutural (≥2 '?'), sem léxico de pronome/tópico
   isConversational(text) {
     const qCount = (text.match(/\?/g) || []).length;
-    const hasPersonal = /(?:^|[^a-zA-ZÀ-ÿ])(eu|tu|você|vocês|nós|I|we|you)(?:[^a-zA-ZÀ-ÿ]|$)/i.test(text);
-    return qCount >= 2 || qCount >= 1 && hasPersonal;
+    return qCount >= 2;
   }
   // ═══════════════════════════════════════════════════
   // SCORING ENGINE (core intelligence — zero word lists)
@@ -314,13 +354,18 @@ var PithEngine = class _PithEngine {
       return 0;
     let score = 0;
     score += Math.min(clean.length, 8);
+    const st = clean.toLowerCase();
+    if (_PithEngine.isRomanceInfinitiveShape(st) && _PithEngine.VERB_INFINITIVE.test(st)) {
+      score += 6;
+    }
+    if (/(?:ando|endo|indo)$/i.test(st) && st.length >= 5) {
+      score += 5;
+    }
     if (clean.length === 3) {
       if (!/[aeiouà-ú]/i.test(clean))
         score += 3;
       if (isQuestion)
         score += 2;
-      if (/^(bom|mal|bad|boa|bug|api|app|web)$/i.test(clean))
-        score += 5;
     }
     if (/^[A-Z][A-Z0-9]+$/.test(clean)) {
       score += 8;
@@ -329,13 +374,17 @@ var PithEngine = class _PithEngine {
     }
     if (totalWords > 30) {
       const ratio = (freq.get(clean.toLowerCase()) || 0) / totalWords;
-      if (ratio > 0.02)
+      if (ratio > 0.02 && !(isSentenceStart && isFirstInLine && clean.length <= 5)) {
         score -= Math.min(Math.floor(ratio * 60), 6);
+      }
     }
     if (clean.length >= 5 && _PithEngine.VERB_CONJUGATED.test(clean.toLowerCase()))
       score -= 3;
     if (isFirstInLine && !isSentenceStart)
       score += 2;
+    if (isSentenceStart && isFirstInLine && clean.length >= 2 && clean.length <= 6) {
+      score += 2;
+    }
     return score;
   }
   // ═══════════════════════════════════════════════════
@@ -354,7 +403,7 @@ var PithEngine = class _PithEngine {
     const final = this.restoreAndClean(abbreviated, preserveMap).trim();
     if (!final)
       return { output: text, noiseRemoved: 0 };
-    const flags = this.computeFlags(text, []);
+    const flags = this.computeFlags(text);
     const finalOutput = this.buildOpcode("C", { payload: final }, flags);
     const outputWordCount = final.split(/\s+/).length;
     const noise = originalWordCount > 0 ? Math.max(0, Math.floor((originalWordCount - outputWordCount) / originalWordCount * 100)) : 0;
@@ -362,7 +411,7 @@ var PithEngine = class _PithEngine {
   }
   // ═══════════════════════════════════════════════════
   // PIPELINE 2: QUERY (symbolic token extraction)
-  // [tag] !action #niche @entity ?attr
+  // [tag] !action #niche @entity ?attr — TAG/GOAL/CSTR/PROTO sem mapas de domínio (só scoring+morfologia)
   // ═══════════════════════════════════════════════════
   queryPipeline(text) {
     const cleaned = this.humanNoiseLayer(text);
@@ -404,7 +453,6 @@ var PithEngine = class _PithEngine {
       "week": "w"
     };
     const skipIndices = /* @__PURE__ */ new Set();
-    const negationRegex = /^(não|nao|not|never|sem|without|nem)$/i;
     let negateNext = false;
     const isQuestion = workText.endsWith("?");
     for (let i = 0; i < words.length; i++) {
@@ -413,7 +461,7 @@ var PithEngine = class _PithEngine {
       const clean = words[i].replace(/[^a-zA-ZÀ-ÿ0-9-]/g, "");
       if (!clean)
         continue;
-      if (negationRegex.test(clean)) {
+      if (_PithEngine.NEGATION_TOGGLE_WORD_RE.test(clean)) {
         negateNext = !negateNext;
         continue;
       }
@@ -453,38 +501,10 @@ var PithEngine = class _PithEngine {
     const entities = [];
     const attrs = [];
     const seen = /* @__PURE__ */ new Set();
-    const infinitives = fused.filter(
-      (item) => !item.word.startsWith("~") && !/\d/.test(item.word) && !/^[A-Z]/.test(item.word) && item.word.length >= 6 && !_PithEngine.ADJECTIVE_SUFFIX.test(item.word.toLowerCase()) && _PithEngine.VERB_INFINITIVE.test(item.word.toLowerCase())
-    ).sort((a, b) => b.score - a.score);
-    const actionWords = infinitives.slice(0, 2).map((i) => i.word);
-    const actionKeys = new Set(actionWords.map((w) => w.toLowerCase()));
-    let action = actionWords.length === 2 ? `![${actionWords[0]}|${actionWords[1]}]` : actionWords.length === 1 ? "!" + actionWords[0] : "";
-    const lower = workText.toLowerCase();
-    let tag = "";
-    for (const aw of actionWords) {
-      const t = _PithEngine.INTENT_TAGS.get(aw.toLowerCase());
-      if (t) {
-        tag = `[${t}]`;
-        break;
-      }
-    }
-    if (!tag) {
-      for (const [key, val] of _PithEngine.INTENT_TAGS.entries()) {
-        if (lower.includes(key)) {
-          tag = `[${val}]`;
-          break;
-        }
-      }
-    }
-    if (!action) {
-      for (const [key] of _PithEngine.INTENT_TAGS.entries()) {
-        if (lower.includes(key) && _PithEngine.VERB_INFINITIVE.test(key)) {
-          action = "!" + key;
-          actionKeys.add(key);
-          break;
-        }
-      }
-    }
+    const picked = _PithEngine.pickVerbalAction(fused, freq, totalWords);
+    let action = picked.action;
+    const actionKeys = picked.actionKeys;
+    const tag = "";
     for (const item of fused) {
       const key = item.word.toLowerCase();
       if (seen.has(key))
@@ -505,19 +525,20 @@ var PithEngine = class _PithEngine {
       if (actionKeys.has(key))
         continue;
       if (!action) {
-        action = "!" + item.word;
+        if (!_PithEngine.isNominalLikelyShape(key)) {
+          action = "!" + item.word;
+        } else {
+          niches.push({ word: "#" + item.word, score: item.score });
+        }
       } else {
         niches.push({ word: "#" + item.word, score: item.score });
       }
     }
     const topNiches = niches.sort((a, b) => b.score - a.score).slice(0, _PithEngine.MAX_QUERY_NICHES).map((n) => n.word);
-    const spec = this.extractProductSpec(text);
-    const lowerNorm = this.isaNorm(text);
-    let { action: actionOut, niches: nichesOut } = this.applySpecToQuery(spec, action, topNiches, lowerNorm);
-    const patched = this.patchGenericQueryInterpretation(lowerNorm, tag, actionOut, nichesOut, [...attrs]);
-    actionOut = patched.action;
-    nichesOut = patched.niches;
-    const attrsFinal = patched.attrs;
+    const spec = { goal: "_", cstr: "_", proto: "_" };
+    const actionOut = action;
+    const nichesOut = topNiches;
+    const attrsFinal = attrs;
     const parts = [];
     if (tag)
       parts.push(tag);
@@ -529,7 +550,7 @@ var PithEngine = class _PithEngine {
       parts.push(e);
     for (const a of attrsFinal)
       parts.push(a);
-    const flags = this.computeFlags(text, parts);
+    const flags = this.computeFlags(text);
     const finalOutput = this.buildOpcode("Q", {
       tag,
       action: actionOut,
@@ -600,12 +621,9 @@ var PithEngine = class _PithEngine {
       }
     }
     const fused = this.fuseProperNouns(survivors);
-    const infinitives = fused.filter(
-      (item) => !/\d/.test(item.word) && !/^[A-Z]/.test(item.word) && item.word.length >= 6 && !_PithEngine.ADJECTIVE_SUFFIX.test(item.word.toLowerCase()) && _PithEngine.VERB_INFINITIVE.test(item.word.toLowerCase())
-    ).sort((a, b) => b.score - a.score);
-    const actionWords = infinitives.slice(0, 2).map((i) => i.word);
-    const actionKeys = new Set(actionWords.map((w) => w.toLowerCase()));
-    let action = actionWords.length === 2 ? `![${actionWords[0]}|${actionWords[1]}]` : actionWords.length === 1 ? "!" + actionWords[0] : "";
+    const picked = _PithEngine.pickVerbalAction(fused, freq, totalWords);
+    let action = picked.action;
+    const actionKeys = picked.actionKeys;
     const niches = [];
     const entities = [];
     const attrs = [];
@@ -619,14 +637,6 @@ var PithEngine = class _PithEngine {
         attrs.push("?" + item.word);
         continue;
       }
-      if (/^(meu|minha|meus|minhas|nosso|nossa|nossos|nossas)$/i.test(item.word)) {
-        attrs.push("?" + key);
-        continue;
-      }
-      if (/^(esposa|esposo|marido|filho|filha)$/i.test(item.word)) {
-        attrs.push("?" + key);
-        continue;
-      }
       if (_PithEngine.ADJECTIVE_SUFFIX.test(key)) {
         attrs.push("?" + key);
         continue;
@@ -637,15 +647,20 @@ var PithEngine = class _PithEngine {
       }
       if (actionKeys.has(key))
         continue;
-      if (!action)
-        action = "!" + item.word;
-      else
+      if (!action) {
+        if (!_PithEngine.isNominalLikelyShape(key)) {
+          action = "!" + item.word;
+        } else {
+          niches.push({ word: "#" + item.word, score: item.score });
+        }
+      } else {
         niches.push({ word: "#" + item.word, score: item.score });
+      }
     }
     const topNiches = niches.sort((a, b) => b.score - a.score).slice(0, _PithEngine.MAX_QUERY_NICHES).map((n) => n.word);
-    const spec = this.extractProductSpec(text);
-    const lowerNorm = this.isaNorm(text);
-    const { action: actionOut, niches: nichesOut } = this.applySpecToQuery(spec, action, topNiches, lowerNorm);
+    const spec = { goal: "_", cstr: "_", proto: "_" };
+    const actionOut = action;
+    const nichesOut = topNiches;
     const parts = [];
     if (stance)
       parts.push(stance);
@@ -657,7 +672,7 @@ var PithEngine = class _PithEngine {
       parts.push(e);
     for (const a of attrs.slice(0, 3))
       parts.push(a);
-    const flags = this.computeFlags(text, parts);
+    const flags = this.computeFlags(text);
     const finalOutput = this.buildOpcode("V", {
       stance,
       tag: "",
@@ -688,232 +703,14 @@ var PithEngine = class _PithEngine {
     const hex = (hash >>> 0).toString(16).toUpperCase();
     return hex.padStart(8, "0").slice(-8);
   }
-  isaNorm(raw) {
-    return raw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  }
-  mergeIsaSpecParts(chunks) {
-    const EMPTY = "_";
-    const goal = [...new Set(chunks.flatMap((c) => c.goal))].join("+") || EMPTY;
-    const cstr = [...new Set(chunks.flatMap((c) => c.cstr))].join("|") || EMPTY;
-    const proto = [...new Set(chunks.flatMap((c) => c.proto))].join("|") || EMPTY;
-    if (goal === EMPTY && cstr === EMPTY && proto === EMPTY) {
-      return { goal: EMPTY, cstr: EMPTY, proto: EMPTY };
-    }
-    return { goal, cstr, proto };
-  }
-  detectAssemblyIsaSpec(n) {
-    const goal = [];
-    const cstr = [];
-    const proto = [];
-    const hasAssembly = /\bassembly\b/.test(n);
-    const hasIa = /\b(ia|ai|llm)\b/.test(n);
-    const humanOut = /linguagem\s+humana/.test(n) && /resposta/.test(n) || /\b(s[oó]|somente|apenas)\s+na\s+resposta\b/.test(n) || /\bhuman\s+language\b/.test(n) && /\bresponse\b/.test(n) || /\bonly\s+in\s+(the\s+)?response\b/.test(n);
-    const asmIn = /\bvai\s+receber\s+apenas\b/.test(n) || /\b(receive|receber)\s+only\s+assembly\b/.test(n) || /\b(apenas|somente|only)\s+(o\s+)?assembly\b/.test(n) && /receber|receive|input|entrada/.test(n) || hasAssembly && /\b(apenas|somente|only)\b/.test(n) && /\b(receber|receive|entrada|input)\b/.test(n);
-    if (hasAssembly && hasIa)
-      goal.push("ASM_IA");
-    if (humanOut)
-      goal.push("HUMAN_OUT");
-    if (asmIn)
-      goal.push("ASM_IN");
-    if (asmIn || hasAssembly && /\b(apenas|somente|only)\b/.test(n) && /\b(receber|receive)\b/.test(n)) {
-      cstr.push("IN_ASM_ONLY");
-    }
-    if (humanOut)
-      cstr.push("OUT_HUMAN_ONLY");
-    if (asmIn || cstr.includes("IN_ASM_ONLY"))
-      proto.push("IN=ASM");
-    if (humanOut || cstr.includes("OUT_HUMAN_ONLY"))
-      proto.push("OUT=HUMAN");
-    return { goal, cstr, proto };
-  }
-  detectLearnIsaSpec(n) {
-    const goal = [];
-    const cstr = [];
-    const proto = [];
-    const hasMlCore = /\b(aprendizado de maquina|machine learning|ml)\b/.test(n) || /\b(aprendizado|learning)\b/.test(n) && /\b(maquina|machine)\b/.test(n);
-    const hasAutonomyIntent = /\b(evoluir sozinho|evolua sozinho)\b/.test(n) || /\b(autonomo|autonomous|self[-\s]?improve|self[-\s]?learning)\b/.test(n) || /\b(sozinho|sozinha|automatico|automaticamente)\b/.test(n) && /\b(evoluir|evolui|evolua|melhorar|consertar|corrigir)\b/.test(n);
-    const hasEngineContext = /\b(algoritmo|motor|engine|modelo|sistema|pith)\b/.test(n);
-    const hasSelfHeal = /\b(se\s+consert|auto[-\s]?corrig|self[-\s]?heal|auto[-\s]?melhor)\b/.test(n);
-    const strongPair = hasMlCore && hasAutonomyIntent;
-    const engineEvolves = hasEngineContext && hasAutonomyIntent && (hasMlCore || hasSelfHeal);
-    if (strongPair || engineEvolves) {
-      goal.push("SELF_IMPROVE");
-      cstr.push("SAFE_AUTONOMY");
-      proto.push("LEARN=ON");
-      proto.push("UPDATE=CONTROLLED");
-    }
-    return { goal, cstr, proto };
-  }
-  detectPromptIsaSpec(n) {
-    const goal = [];
-    const cstr = [];
-    const proto = [];
-    const hasPromptCore = /\b(prompt|prompts)\b/.test(n) || /\b(comando|instrucao|instrucoes)\b/.test(n);
-    const hasGenericCoverage = /\b(generico|gen[eé]rico|qualquer|any|todos os casos|all cases)\b/.test(n) && /\b(funcione|funcionar|robusto|robust|consistente|consistent)\b/.test(n);
-    if (hasPromptCore && hasGenericCoverage) {
-      goal.push("ROBUST_PROMPT");
-      cstr.push("GENERIC_COVERAGE");
-      proto.push("INPUT=ANY");
-      proto.push("OUTPUT=CONSISTENT");
-    }
-    return { goal, cstr, proto };
-  }
-  /** Product / protocol intent: merged detectores opt-in (assembly, learn, prompt). */
-  extractProductSpec(raw) {
-    const n = this.isaNorm(raw);
-    return this.mergeIsaSpecParts([
-      this.detectAssemblyIsaSpec(n),
-      this.detectLearnIsaSpec(n),
-      this.detectPromptIsaSpec(n)
-    ]);
-  }
-  /** Preenche ACT/N/A de forma genérica quando o scoring deixou slots vazios demais. */
-  patchGenericQueryInterpretation(lowerNorm, tag, actionOut, nichesOut, attrs) {
-    const action = actionOut || "";
-    let niches = [...nichesOut];
-    const attrsOut = [...attrs];
-    const tagVal = tag.replace(/[\[\]]/g, "");
-    const isExplanatory = tagVal === "ex";
-    const isQuestion = /\?/.test(lowerNorm) || /^(como|qual|quais|quem|onde|quando|por que|porque|o que|what|how|why|when|where)\b/.test(lowerNorm);
-    let nextAction = action;
-    if (isExplanatory && !nextAction.replace(/^!/, "")) {
-      nextAction = "!consultar";
-    }
-    const hasNiche = (w) => niches.some((n) => n.replace(/^#/, "").toLowerCase() === w);
-    const pushNiche = (w) => {
-      if (!hasNiche(w))
-        niches.push("#" + w);
-    };
-    if (!niches.length) {
-      if (/\btempo\b/.test(lowerNorm))
-        pushNiche("tempo");
-      else if (/\bclima\b/.test(lowerNorm))
-        pushNiche("clima");
-      else if (/\bweather\b/.test(lowerNorm))
-        pushNiche("weather");
-    }
-    if (!niches.length && (isExplanatory || isQuestion)) {
-      const m = lowerNorm.match(
-        /\b(?:como\s+(?:esta|está|ta|e)|qual\s+(?:e|é|seria)|o\s+que\s+(?:e|é))\s+(?:o\s+|a\s+)?([a-zà-öø-ÿ]{3,})\b/
-      );
-      if (m) {
-        const w = m[1];
-        const stop = /* @__PURE__ */ new Set([
-          "esta",
-          "est\xE1",
-          "esse",
-          "essa",
-          "isso",
-          "aquilo",
-          "coisa",
-          "situa",
-          "situacao"
-        ]);
-        if (!stop.has(w))
-          pushNiche(w);
-      }
-    }
-    const pushAttr = (w) => {
-      const key = w.toLowerCase();
-      if (!attrsOut.some((a) => a.replace(/^\?/, "").toLowerCase() === key))
-        attrsOut.push("?" + key);
-    };
-    if (/\bhoje\b|today\b/.test(lowerNorm))
-      pushAttr("hoje");
-    if (/\bagora\b|now\b/.test(lowerNorm))
-      pushAttr("agora");
-    if (/\b(amanha|amanhã|tomorrow)\b/.test(lowerNorm))
-      pushAttr("amanha");
-    return { action: nextAction, niches, attrs: attrsOut };
-  }
-  static SPEC_NICHE_STOP = /* @__PURE__ */ new Set([
-    "elogiam",
-    "elogio",
-    "ninguem",
-    "ningu\xE9m",
-    "sonhou",
-    "sonhar",
-    "todos",
-    "todas",
-    "maravilhosa",
-    "maravilhoso",
-    "engine",
-    "quero",
-    "queria",
-    "linguagem",
-    "resposta",
-    "humana",
-    "humano",
-    "receber",
-    "perfeito",
-    "agora",
-    "funcione",
-    "precisa",
-    "qualquer",
-    "generico",
-    "gen\xE9rico",
-    "prompt"
-  ]);
-  applySpecToQuery(spec, action, topNiches, lowerFull) {
-    const empty = spec.goal === "_" && spec.cstr === "_" && spec.proto === "_";
-    if (empty)
-      return { action, niches: topNiches };
-    const hasIn = spec.proto.includes("IN=ASM");
-    const hasOut = spec.proto.includes("OUT=HUMAN");
-    const hasLearn = spec.goal.includes("SELF_IMPROVE") || spec.proto.includes("LEARN=ON");
-    const hasPromptSpec = spec.goal.includes("ROBUST_PROMPT") || spec.proto.includes("INPUT=ANY");
-    let nextAction = action;
-    if (hasLearn)
-      nextAction = "![define|learning]";
-    else if (hasPromptSpec)
-      nextAction = "![define|prompt]";
-    else if (hasIn && hasOut)
-      nextAction = "![define|protocol]";
-    else if (hasIn)
-      nextAction = "!define_asm_in";
-    else if (hasOut)
-      nextAction = "!define_human_out";
-    else
-      nextAction = "!spec_product";
-    const filtered = topNiches.map((n) => n.replace(/^#/, "")).filter((w) => w && !_PithEngine.SPEC_NICHE_STOP.has(w.toLowerCase()));
-    const extra = [];
-    if (/\bassembly\b/.test(lowerFull) && !filtered.some((x) => x.toLowerCase() === "assembly")) {
-      extra.push("assembly");
-    }
-    if (hasLearn && !filtered.some((x) => x.toLowerCase() === "aprendizado")) {
-      extra.push("aprendizado");
-    }
-    if (hasLearn && !filtered.some((x) => x.toLowerCase() === "maquina")) {
-      extra.push("maquina");
-    }
-    if (hasPromptSpec && !filtered.some((x) => x.toLowerCase() === "algoritmo")) {
-      extra.push("algoritmo");
-    }
-    if (hasPromptSpec && !filtered.some((x) => x.toLowerCase() === "prompt")) {
-      extra.push("prompt");
-    }
-    const merged = [...extra, ...filtered];
-    const seen = /* @__PURE__ */ new Set();
-    const niches = [];
-    for (const w of merged) {
-      const k = w.toLowerCase();
-      if (seen.has(k))
-        continue;
-      seen.add(k);
-      niches.push("#" + w);
-      if (niches.length >= _PithEngine.MAX_QUERY_NICHES)
-        break;
-    }
-    return { action: nextAction, niches };
-  }
-  computeFlags(originalText, parts) {
+  /** Flags só por forma (código, lista, densidade), sem léxico de domínio. */
+  computeFlags(originalText) {
     const flags = [];
-    const lowerOriginal = originalText.toLowerCase();
-    const hasTag = (tag) => parts.some((p) => p === tag);
-    if (hasTag("[fx]") || hasTag("[gen]") || /```/.test(originalText) || /\b(código|code|script|função|function|refactor)\b/.test(lowerOriginal)) {
+    const codeLike = /```/.test(originalText) || /[;{}]{3,}/.test(originalText) || /(?:[\s)\]\},;:]|\breturn)\s*=>/.test(originalText);
+    if (codeLike) {
       flags.push("NE");
     }
-    if (/\b(liste|listar|list|lista)\b/.test(lowerOriginal)) {
+    if (/^\s*[-*•]\s/m.test(originalText) || /^\s*\d+\.\s/m.test(originalText)) {
       flags.push("BL");
     }
     const origWords = originalText.split(/\s+/).length;
@@ -933,10 +730,7 @@ var PithEngine = class _PithEngine {
     const niches = data.niches && data.niches.length ? data.niches.map((n) => n.replace(/^#/, "")).filter(Boolean).join(",") : "";
     const entities = data.entities && data.entities.length ? data.entities.map((e) => e.replace(/^@/, "")).filter(Boolean).join(",") : "";
     const attrs = data.attrs && data.attrs.length ? data.attrs.map((a) => a.replace(/^\?/, "")).map((a) => a.replace(/^(\d+)[a-z]+$/i, "$1")).filter(Boolean).join(",") : "";
-    let payload = data.payload ? data.payload.replace(/\s+/g, " ").trim() : "";
-    if (payload.length > _PithEngine.MAX_PAYLOAD_CHARS) {
-      payload = payload.slice(0, _PithEngine.MAX_PAYLOAD_CHARS);
-    }
+    const payload = data.payload ? data.payload.replace(/\s+/g, " ").trim() : "";
     const flagsOut = flags.length ? flags.join(",") : "";
     const ordered = [
       `M=${mode}`,
@@ -1037,7 +831,7 @@ var PithEngine = class _PithEngine {
     r = r.replace(/\bdepois( de)?\b/gi, ">");
     r = r.replace(/\bapós\b/gi, ">");
     r = r.replace(/\b(is|are|was|were)\b/gi, "=");
-    r = r.replace(/\b(é|são|está|estão|era|eram)\b/gi, "=");
+    r = r.replace(_PithEngine.COPULA_PT_RE, "=");
     r = r.replace(/[Jj]ust as we have for\s+(\w+)\s+and\s+(\w+)/g, (_m, a, b) => `$${a},$${b}`);
     r = r.replace(/[Aa]ssim como (?:temos|fizemos) para\s+(\w+)\s+e\s+(\w+)/g, (_m, a, b) => `$${a},$${b}`);
     r = r.replace(/\baccording to\b/gi, "=>");
@@ -1055,7 +849,6 @@ var PithEngine = class _PithEngine {
     const lines = text.split("\n");
     const result = [];
     const isQuestionLine = (line) => line.trim().endsWith("?");
-    const negationRegex = /^(não|nao|not|never|sem|without|nem)$/i;
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) {
@@ -1083,9 +876,12 @@ var PithEngine = class _PithEngine {
           if (w.includes("\0"))
             return Infinity;
           const wClean = w.replace(/[^a-zA-ZÀ-ÿ0-9-]/g, "");
-          if (!wClean)
+          if (!wClean) {
+            if (_PithEngine.isPatternSymbolToken(w))
+              return Infinity;
             return null;
-          if (negationRegex.test(wClean))
+          }
+          if (_PithEngine.NEGATION_TOGGLE_WORD_RE.test(wClean))
             return null;
           const isSentStart = lineStarts.has(i);
           return this.scoreWord(w, freq, totalWords, i === 0 && !marker, isSentStart, isQuestion);
@@ -1093,11 +889,20 @@ var PithEngine = class _PithEngine {
         const boosted = rawScores.map((s, i) => {
           if (s === null || s === Infinity || s >= threshold)
             return s;
-          const prev = rawScores[i - 1] ?? null;
-          const next = rawScores[i + 1] ?? null;
-          const neighborMax = Math.max(prev ?? -Infinity, next ?? -Infinity);
+          const wClean = words[i].replace(/[^a-zA-ZÀ-ÿ0-9-]/g, "");
+          const prev = rawScores[i - 1];
+          const next = rawScores[i + 1];
+          const prevOk = typeof prev === "number" && prev >= threshold;
+          const nextOk = typeof next === "number" && next >= threshold;
+          if (wClean.length >= 1 && wClean.length <= 3 && prevOk && nextOk) {
+            return Math.max(s ?? 0, threshold);
+          }
+          const neighborMax = Math.max(
+            typeof prev === "number" ? prev : -Infinity,
+            typeof next === "number" ? next : -Infinity
+          );
           if (neighborMax >= threshold + 2)
-            return s + 3;
+            return (s ?? 0) + 3;
           return s;
         });
         const kept = [];
@@ -1111,9 +916,14 @@ var PithEngine = class _PithEngine {
             continue;
           }
           const wClean = w.replace(/[^a-zA-ZÀ-ÿ0-9-]/g, "");
-          if (!wClean)
+          if (!wClean) {
+            if (_PithEngine.isPatternSymbolToken(w)) {
+              kept.push(w);
+              negateNext = false;
+            }
             continue;
-          if (negationRegex.test(wClean)) {
+          }
+          if (_PithEngine.NEGATION_TOGGLE_WORD_RE.test(wClean)) {
             negateNext = !negateNext;
             continue;
           }
