@@ -3,5 +3,8 @@
   "version": "1.0.0",
   "main": "src/index.ts",
   "types": "src/index.ts",
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "test": "npx tsx src/pithEngine.fixtures.test.ts"
+  }
 }

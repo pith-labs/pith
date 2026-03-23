@@ -5,21 +5,21 @@
     "src": "../../../../../../../@crx/manifest",
     "isEntry": true
   },
-  "_PithEngine-DY2ZBW4K.js": {
-    "file": "assets/PithEngine-DY2ZBW4K.js",
+  "_PithEngine-CuxI7Cue.js": {
+    "file": "assets/PithEngine-CuxI7Cue.js",
     "name": "PithEngine"
   },
   "content.ts-loader.js": {
-    "file": "assets/content.ts-loader-CjfKn4HG.js",
+    "file": "assets/content.ts-loader-CDPETDJt.js",
     "src": "content.ts-loader.js"
   },
   "index.html": {
-    "file": "assets/index.html-BwmKOY_N.js",
+    "file": "assets/index.html-DawSlXpz.js",
     "name": "index.html",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_PithEngine-DY2ZBW4K.js"
+      "_PithEngine-CuxI7Cue.js"
     ],
     "css": [
       "assets/index-DpgB2L5D.css"
@@ -32,12 +32,12 @@
     "isEntry": true
   },
   "src/content/content.ts": {
-    "file": "assets/content.ts-Bf9S1b4d.js",
+    "file": "assets/content.ts-Bkh11vMm.js",
     "name": "content.ts",
     "src": "src/content/content.ts",
     "isEntry": true,
     "imports": [
-      "_PithEngine-DY2ZBW4K.js"
+      "_PithEngine-CuxI7Cue.js"
     ]
   }
 }
