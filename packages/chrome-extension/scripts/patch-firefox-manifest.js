@@ -14,7 +14,6 @@ const localesDest = resolve(root, 'dist/_locales');
 
 if (existsSync(localesSrc)) {
   cpSync(localesSrc, localesDest, { recursive: true });
-  console.log('✓ _locales copied to dist');
 }
 
 const manifest = JSON.parse(readFileSync(distManifest, 'utf8'));
@@ -35,4 +34,3 @@ manifest.browser_specific_settings = {
 };
 
 writeFileSync(distManifest, JSON.stringify(manifest, null, 2));
-console.log('✓ Firefox manifest patch applied');

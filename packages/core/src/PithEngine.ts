@@ -222,8 +222,7 @@ export class PithEngine {
       this.emitOptimizeTelemetry(text, out, kind);
       return out;
 
-    } catch (error) {
-      console.error('Pith Engine Error:', error);
+    } catch {
       const out = { output: text, noiseRemoved: 0, isQuery: false };
       this.emitOptimizeTelemetry(text, out, kind);
       return out;

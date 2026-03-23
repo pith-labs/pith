@@ -32,7 +32,6 @@ app.route('/v1/ml',       mlRouter);
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 
 const port = parseInt(process.env.PORT ?? '3001');
-console.log(`[PITH API] Running on http://localhost:${port}`);
 
 startMlCron();
 

@@ -22,18 +22,14 @@ export function startMlCron(): void {
 
   const run = async () => {
     try {
-      const result = await compileMlConfigJob({ createdBy: null, promote: autoPromote });
-      const v = (result.config as any)?.version ?? '?';
-      const s = (result.config as any)?.status ?? 'candidate';
-      console.log(`[PITH ML CRON] compiled config v${v} status=${s}`);
-    } catch (err) {
-      console.error('[PITH ML CRON] compile failed:', err);
+      await compileMlConfigJob({ createdBy: null, promote: autoPromote });
+    } catch {
+      /* compile failed */
     }
   };
 
   // Run once on startup, then interval.
   void run();
   setInterval(() => { void run(); }, intervalMs);
-  console.log(`[PITH ML CRON] enabled interval=${intervalMs}ms autoPromote=${autoPromote}`);
 }
 

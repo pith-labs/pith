@@ -324,7 +324,13 @@ export async function insertMlTelemetrySample(params: {
         crypto_version: 0,
       };
 
-  const { data: insertedSample } = await db.from('ml_samples').insert(row).select('id').single();
+  const { data: insertedSample, error: insertErr } = await db
+    .from('ml_samples')
+    .insert(row)
+    .select('id')
+    .single();
+
+  if (insertErr) throw new Error(insertErr.message);
 
   return {
     id: insertedSample?.id ?? null,
@@ -412,26 +418,31 @@ mlRouter.post('/sample', auth, rateLimit, zValidator('json', bodySchema), async 
     input_length: text.length,
   }).then();
 
-  const result = await insertMlTelemetrySample({
-    userId,
-    apiKeyId: apiKeyId || null,
-    text,
-    output,
-    noiseRemoved,
-    isQuery,
-    sampleKind,
-    includeInputForMl,
-  });
+  try {
+    const result = await insertMlTelemetrySample({
+      userId,
+      apiKeyId: apiKeyId || null,
+      text,
+      output,
+      noiseRemoved,
+      isQuery,
+      sampleKind,
+      includeInputForMl,
+    });
 
-  return c.json({
-    ok: true,
-    recorded: true,
-    learned: result.learned,
-    sampleId: result.id,
-    reason: result.reason,
-    autoScore: result.autoScore,
-    autoVerdict: result.autoVerdict,
-  });
+    return c.json({
+      ok: true,
+      recorded: true,
+      learned: result.learned,
+      sampleId: result.id,
+      reason: result.reason,
+      autoScore: result.autoScore,
+      autoVerdict: result.autoVerdict,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: 'ml_sample_insert_failed', detail: msg }, 500);
+  }
 });
 
 // POST /v1/ml/feedback — explicit reward signal (acerto/erro + correção opcional)

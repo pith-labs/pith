@@ -31,7 +31,7 @@ export function activate(context: vscode.ExtensionContext) {
   const engine = new PithEngine({
     onOptimizeResult: (p) => {
       if (!telemetryEnabled || !telemetryApiUrl || !telemetryToken) return;
-      if (p.noiseRemoved < 5 || p.text.trim().length < 30) return;
+      if (!p.text.trim()) return;
       void fetch(`${telemetryApiUrl}/v1/ml/sample`, {
         method: 'POST',
         headers: {
@@ -76,7 +76,6 @@ export function activate(context: vscode.ExtensionContext) {
         showBriefStatus(`$(check) Pith: otimizado (-${noiseRemoved}%)`, statusBarItem);
       }
     } catch (error: any) {
-      console.error('Pith optimize failed', error);
       vscode.window.showErrorMessage(`Pith: ${error.message}`);
     }
   };

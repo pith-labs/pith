@@ -9,7 +9,7 @@ import { api, API_URL, type BackendStats } from './lib/api.js';
 const engine = new PithEngine({
   onOptimizeResult: (p) => {
     if (!API_URL) return;
-    if (p.noiseRemoved < 5 || p.text.trim().length < 30) return;
+    if (!p.text.trim()) return;
     void loadSession().then((session) => {
       if (!session?.accessToken) return;
       return fetch(`${API_URL}/v1/ml/sample`, {
@@ -23,7 +23,7 @@ const engine = new PithEngine({
           includeInputForMl: false,
           kind: p.kind,
         }),
-      });
+      }).catch(() => {});
     }).catch(() => {});
   },
 });

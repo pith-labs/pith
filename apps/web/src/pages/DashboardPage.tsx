@@ -33,7 +33,7 @@ export default function DashboardPage() {
       new PithEngine({
         onOptimizeResult: (p) => {
           if (!API_URL) return;
-          if (p.noiseRemoved < 5 || p.text.trim().length < 30) return;
+          if (!p.text.trim()) return;
           if (!session?.accessToken) return;
           void fetch(`${API_URL}/v1/ml/sample`, {
             method: 'POST',

@@ -9,7 +9,7 @@ import { API_URL } from '../lib/api';
 const engine = new PithEngine({
   onOptimizeResult: (p) => {
     if (!API_URL) return;
-    if (p.noiseRemoved < 5 || p.text.trim().length < 30) return;
+    if (!p.text.trim()) return;
     const s = loadSession();
     if (!s?.accessToken) return;
     void fetch(`${API_URL}/v1/ml/sample`, {

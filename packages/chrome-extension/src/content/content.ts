@@ -36,10 +36,7 @@ type LogMeta = {
 // Telemetry + ML (async via PithEngine microtask → não bloqueia compressão)
 function logUsage(originalText: string, meta: LogMeta) {
   if (!API_URL) return;
-  if (!sessionToken) {
-    console.warn('[PITH] logUsage skipped: no session token');
-    return;
-  }
+  if (!sessionToken) return;
   const send = (includeInputForMl: boolean) => {
     fetch(`${API_URL}/v1/ml/sample`, {
       method: 'POST',
@@ -55,14 +52,11 @@ function logUsage(originalText: string, meta: LogMeta) {
     })
       .then(async (res) => {
         if (res.status === 401) {
-          console.warn('[PITH] token expired — clearing session');
           sessionToken = null;
           chrome.storage.local.remove('pithSession');
         }
       })
-      .catch((err) => {
-        console.warn('[PITH] logUsage error:', err);
-      });
+      .catch(() => {});
   };
   if (typeof chrome !== 'undefined' && chrome.storage?.local) {
     chrome.storage.local.get(['pithMlIncludeInput'], (r) => {
@@ -75,8 +69,7 @@ function logUsage(originalText: string, meta: LogMeta) {
 
 const engine = new PithEngine({
   onOptimizeResult: (p) => {
-    const min = p.kind === 'assistant_response' ? 10 : 5;
-    if (p.noiseRemoved < min) return;
+    if (!p.text.trim()) return;
     logUsage(p.text, {
       output: p.output,
       noiseRemoved: p.noiseRemoved,
@@ -644,4 +637,3 @@ function showBadge(text: string, color: string) {
   setTimeout(() => badge.remove(), 2000);
 }
 
-console.log('[PITH] Content script loaded — Ctrl+Shift+L to toggle');
