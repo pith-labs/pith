@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
 );
 
 -- View: compressions this calendar month per user
-CREATE OR REPLACE VIEW monthly_usage AS
+CREATE OR REPLACE VIEW public.monthly_usage AS
   SELECT
     user_id,
     COUNT(*)            AS compressions,
@@ -52,7 +52,7 @@ CREATE OR REPLACE VIEW monthly_usage AS
   GROUP BY user_id;
 
 -- View: lifetime aggregated stats per user (prevents loading all logs into memory)
-CREATE OR REPLACE VIEW lifetime_usage AS
+CREATE OR REPLACE VIEW public.lifetime_usage AS
   SELECT
     user_id,
     COUNT(*)            AS total_compressions,
@@ -61,15 +61,18 @@ CREATE OR REPLACE VIEW lifetime_usage AS
   FROM usage_logs
   GROUP BY user_id;
 
--- RLS
-ALTER TABLE profiles   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE usage_logs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE api_keys   ENABLE ROW LEVEL SECURITY;
+-- Supabase linter: neutralize SECURITY DEFINER on this view
+ALTER VIEW public.lifetime_usage SET (security_invoker = on);
 
-CREATE POLICY "users read own profile"   ON profiles   FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "users read own logs"      ON usage_logs FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "users manage own keys"    ON api_keys   FOR ALL    USING (auth.uid() = user_id);
-CREATE POLICY "service inserts logs"     ON usage_logs FOR INSERT WITH CHECK (true);
+-- RLS
+ALTER TABLE public.profiles   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.usage_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.api_keys   ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "users read own profile"   ON public.profiles   FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "users read own logs"      ON public.usage_logs FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "users manage own keys"    ON public.api_keys   FOR ALL    USING (auth.uid() = user_id);
+CREATE POLICY "service inserts logs"     ON public.usage_logs FOR INSERT WITH CHECK (true);
 
 -- ML / telemetry: input_sha256 + ciphertext (LGPD) or legacy plaintext when ML_ENCRYPTION_KEY unset
 CREATE TABLE IF NOT EXISTS ml_samples (
