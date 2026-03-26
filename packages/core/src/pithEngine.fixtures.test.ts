@@ -264,6 +264,15 @@ const cases: Case[] = [
     },
   },
   {
+    name: 'Ambíguo: fallback UNCERTAIN evita compress',
+    input:
+      'tenho um cenário estranho de arquitetura com detalhes mistos de contexto, possível solução e impacto; quero organizar isso por domínio sem perder rastreabilidade',
+    assert: (o, m) => {
+      assert.equal(m.isQuery, true);
+      assert.match(o, /^M=Q /);
+    },
+  },
+  {
     name: 'PT literário (sem infinitivo na superfície) → verbo finito',
     input:
       'Embora a análise sintática de períodos compostos exija atenção meticulosa, a intersecção entre a semântica e a pragmática revela nuances que, frequentemente, passam despercebidas em leituras superficiais.',

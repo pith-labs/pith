@@ -36,6 +36,15 @@ export class PithEngine {
   }
 
   private detectMode(text: string): 'compress' | 'query' | 'conversational' {
+    const decision = this.detectModeWithConfidence(text);
+    return decision.mode;
+  }
+
+  private detectModeWithConfidence(text: string): {
+    mode: 'compress' | 'query' | 'conversational';
+    confidence: number;
+    uncertain: boolean;
+  } {
     const words = text.split(/\s+/).length;
     const nonEmptyLines = text.split('\n').filter(l => l.trim()).length;
     const qCount = (text.match(/\?/g) || []).length;
@@ -62,9 +71,27 @@ export class PithEngine {
       (hasBulletList ? 3 : 0) +
       (!hasQuestion && !looksLikeSpec ? 1 : 0);
 
-    if (conversationalScore >= queryScore && conversationalScore >= compressScore) return 'conversational';
-    if (queryScore >= compressScore) return 'query';
-    return 'compress';
+    const ranked = [
+      { mode: 'query' as const, score: queryScore },
+      { mode: 'conversational' as const, score: conversationalScore },
+      { mode: 'compress' as const, score: compressScore },
+    ].sort((a, b) => b.score - a.score);
+
+    const top = ranked[0];
+    const second = ranked[1];
+    const confidence = top.score <= 0 ? 0 : (top.score - second.score) / top.score;
+    const uncertain = confidence < 0.22;
+
+    // Fail-safe: when uncertain, prefer semantic extraction over destructive compression.
+    if (uncertain && top.mode === 'compress') {
+      return { mode: 'query', confidence, uncertain: true };
+    }
+    // Conversational sem 2+ perguntas reais tende a ser falso positivo; degrade para query.
+    if (uncertain && top.mode === 'conversational' && qCount < 2) {
+      return { mode: 'query', confidence, uncertain: true };
+    }
+
+    return { mode: top.mode, confidence, uncertain };
   }
 
   private looksLikeSpecBrief(text: string): boolean {
