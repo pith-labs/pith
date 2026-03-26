@@ -1,8 +1,46 @@
 import { ADJECTIVE_SUFFIX, MAX_QUERY_NICHES, NEGATION_TOGGLE_WORD_RE, QUERY_THRESHOLD } from './constants.js';
-import { isNominalLikelyShape } from './morphology.js';
+import { isInfinitiveCandidate, isNominalLikelyShape } from './morphology.js';
 import { buildOpcode, computeFlags, type OpcodeRenderOptions } from './opcode.js';
 import { humanNoiseLayer } from './textLayers.js';
 import { buildFreqMap, fuseProperNouns, pickVerbalAction, scoreWord, type ScoredWord } from './shared.js';
+
+function pickBriefAction(text: string): string {
+  const sectionMatch = text.match(
+    /(?:^|\n)\s*(?:objetivo|escopo)\s*\n([\s\S]{0,1200})/i
+  );
+  const section = sectionMatch?.[1] ?? '';
+  if (!section) return '';
+
+  const verbs = Array.from(section.matchAll(/\b([a-zà-ÿ]{4,24}(?:ar|er|ir))\b/gi))
+    .map(m => m[1].toLowerCase());
+  if (!verbs.length) return '';
+
+  const priority: Record<string, number> = {
+    implementar: 10,
+    integrar: 9,
+    criar: 8,
+    automatizar: 8,
+    orquestrar: 8,
+    definir: 7,
+    ajustar: 6,
+    reaproveitar: 6,
+    registrar: 5,
+  };
+
+  let best = '';
+  let bestScore = -Infinity;
+  for (let i = 0; i < verbs.length; i++) {
+    const v = verbs[i];
+    const p = priority[v] ?? 0;
+    const positionBoost = Math.max(0, 3 - i * 0.25);
+    const score = p + positionBoost;
+    if (score > bestScore) {
+      bestScore = score;
+      best = v;
+    }
+  }
+  return best;
+}
 
 export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): { output: string; noiseRemoved: number } {
   const cleaned = humanNoiseLayer(text);
@@ -32,6 +70,7 @@ export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): 
   const skipIndices = new Set<number>();
   let negateNext = false;
   const isQuestion = /\?/.test(text);
+  const briefActionCandidate = pickBriefAction(text);
   const qActionMatch = isQuestion
     ? workText.match(/\bcomo\s+[\p{L}\p{M}]+\s+([\p{L}\p{M}]{4,24}(?:ria|aria|eria|iria|iam|ariam|eriam|iriam))\b/iu)
     : null;
@@ -88,9 +127,10 @@ export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): 
   let actionKeys = picked.actionKeys;
   const tag = '';
 
-  if (questionActionCandidate) {
-    action = '!' + questionActionCandidate;
-    actionKeys = new Set([questionActionCandidate]);
+  const forcedAction = briefActionCandidate || questionActionCandidate;
+  if (forcedAction) {
+    action = '!' + forcedAction;
+    actionKeys = new Set([forcedAction]);
   }
 
   for (const item of fused) {
@@ -102,11 +142,21 @@ export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): 
       attrs.push('?' + item.word);
       continue;
     }
-    if (ADJECTIVE_SUFFIX.test(item.word.toLowerCase()) && item.word.length >= 6 && !/mente$/i.test(item.word)) {
+    if (
+      ADJECTIVE_SUFFIX.test(item.word.toLowerCase()) &&
+      item.word.length >= 8 &&
+      !/mente$/i.test(item.word) &&
+      !/^(objetivo|canonica|relevante|auditavel|suficiente|resultado)$/i.test(item.word)
+    ) {
       attrs.push('?' + item.word.toLowerCase());
       continue;
     }
-    if (/^[A-Z]/.test(item.word)) {
+    if (
+      /^[A-Z]/.test(item.word) &&
+      item.word.length >= 3 &&
+      !isInfinitiveCandidate(item.word) &&
+      !/^(contexto|objetivo|escopo|resultado|criterios?)$/i.test(item.word)
+    ) {
       entities.push('@' + item.word);
       continue;
     }

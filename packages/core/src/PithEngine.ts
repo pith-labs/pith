@@ -50,6 +50,12 @@ export class PithEngine {
       return qCount >= 2 ? 'conversational' : 'query';
     }
 
+    // Especificação/brief técnico longo (contexto/objetivo/escopo/aceite + paths/eventos)
+    // deve virar query semântica, não compressão textual.
+    if (this.looksLikeSpecBrief(text) && !hasCodeFence) {
+      return 'query';
+    }
+
     if (words > 40) return 'compress';
     if (nonEmptyLines > 3) return 'compress';
     if (hasCodeFence) return 'compress';
@@ -57,6 +63,28 @@ export class PithEngine {
     if (hasBulletList) return 'compress';
     if (this.isConversational(text)) return 'conversational';
     return 'query';
+  }
+
+  private looksLikeSpecBrief(text: string): boolean {
+    const sections = [
+      /(^|\n)\s*contexto\s*$/im,
+      /(^|\n)\s*objetivo\s*$/im,
+      /(^|\n)\s*escopo\s*$/im,
+      /(^|\n)\s*resultado esperado\s*$/im,
+      /(^|\n)\s*critérios? de aceite\s*$/im,
+      /(^|\n)\s*scope\s*$/im,
+      /(^|\n)\s*goal\s*$/im,
+      /(^|\n)\s*acceptance criteria\s*$/im,
+    ].filter(re => re.test(text)).length;
+
+    const techSignals = [
+      /(?:^|\s)(app|src|packages)\/[^\s]+/i.test(text),
+      /\b(send_[a-z_]+)\b/i.test(text),
+      /\b(?:idempot[eê]ncia|idempotency|retry|reprocessamentos?)\b/i.test(text),
+      /\b(?:eventos?|transiç(?:ão|oes)|transition|notifier|orquestraç(?:ão|oes))\b/i.test(text),
+    ].filter(Boolean).length;
+
+    return sections >= 2 && techSignals >= 1;
   }
 
   // Conversational: só sinal estrutural (≥2 '?'), sem léxico de pronome/tópico

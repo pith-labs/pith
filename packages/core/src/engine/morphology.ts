@@ -19,7 +19,6 @@ export function isInfinitiveCandidate(word: string): boolean {
     word.length <= 24 &&
     !word.startsWith('~') &&
     !/\d/.test(word) &&
-    !/^[A-Z]/.test(word) &&
     !ADJECTIVE_SUFFIX.test(lower) &&
     VERB_INFINITIVE.test(lower) &&
     isRomanceInfinitiveShape(lower)

@@ -78,12 +78,14 @@ function weightInfinitiveAction(
   baseScore: number,
   word: string,
   freq: Map<string, number>,
-  totalWords: number
+  totalWords: number,
+  origIdx: number
 ): number {
   const key = word.toLowerCase();
   const tf = freq.get(key) ?? 0;
   const idf = Math.log1p(totalWords / (tf + 1));
-  return baseScore * (1 + 0.35 * idf);
+  const pos = Math.max(0, 1 - origIdx / Math.max(totalWords, 1));
+  return baseScore * (1 + 0.35 * idf) + pos * 1.5;
 }
 
 export function pickVerbalAction(
@@ -93,7 +95,7 @@ export function pickVerbalAction(
 ): { action: string; actionKeys: Set<string> } {
   const weigh = (item: ScoredWord) => ({
     ...item,
-    score: weightInfinitiveAction(item.score, item.word, freq, totalWords),
+    score: weightInfinitiveAction(item.score, item.word, freq, totalWords, item.origIdx),
   });
   const inf = fused.filter(item => isInfinitiveCandidate(item.word)).map(weigh);
   const ger = fused.filter(item => isGerundCandidate(item.word)).map(weigh);
@@ -133,7 +135,13 @@ export function fuseProperNouns(items: ScoredWord[]): ScoredWord[] {
       let maxScore = items[i].score;
       let lastOrigIdx = items[i].origIdx;
       let j = i + 1;
-      while (j < items.length && /^[A-ZÀ-Ý][a-zà-ÿ]/.test(items[j].word) && items[j].origIdx === lastOrigIdx + 1) {
+      while (
+        j < items.length &&
+        /^[A-ZÀ-Ý][a-zà-ÿ]/.test(items[j].word) &&
+        items[j].origIdx === lastOrigIdx + 1 &&
+        !isInfinitiveCandidate(items[i].word) &&
+        !isInfinitiveCandidate(items[j].word)
+      ) {
         fused += items[j].word;
         maxScore = Math.max(maxScore, items[j].score);
         lastOrigIdx = items[j].origIdx;

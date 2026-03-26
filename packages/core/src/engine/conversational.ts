@@ -1,5 +1,5 @@
 import { ADJECTIVE_SUFFIX, MAX_QUERY_NICHES } from './constants.js';
-import { isNominalLikelyShape } from './morphology.js';
+import { isInfinitiveCandidate, isNominalLikelyShape } from './morphology.js';
 import { buildOpcode, computeFlags, type OpcodeRenderOptions } from './opcode.js';
 import { humanNoiseLayer } from './textLayers.js';
 import { buildFreqMap, fuseProperNouns, pickVerbalAction, scoreWord, type ScoredWord } from './shared.js';
@@ -66,8 +66,13 @@ export function conversationalPipeline(text: string, options: OpcodeRenderOption
     if (seen.has(key)) continue;
     seen.add(key);
     if (/\d/.test(item.word)) { attrs.push('?' + item.word); continue; }
-    if (ADJECTIVE_SUFFIX.test(key) && item.word.length >= 6 && !/mente$/i.test(item.word)) { attrs.push('?' + key); continue; }
-    if (/^[A-Z]/.test(item.word)) { entities.push('@' + item.word); continue; }
+    if (
+      ADJECTIVE_SUFFIX.test(key) &&
+      item.word.length >= 8 &&
+      !/mente$/i.test(item.word) &&
+      !/^(objetivo|canonica|relevante|auditavel|suficiente|resultado)$/i.test(item.word)
+    ) { attrs.push('?' + key); continue; }
+    if (/^[A-Z]/.test(item.word) && item.word.length >= 3 && !isInfinitiveCandidate(item.word)) { entities.push('@' + item.word); continue; }
     if (actionKeys.has(key)) continue;
     if (!action) {
       if (!isNominalLikelyShape(key)) {

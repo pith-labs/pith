@@ -142,6 +142,32 @@ const cases: Case[] = [
     },
   },
   {
+    name: 'Brief técnico com seções não vira compress',
+    input: [
+      'Contexto',
+      '',
+      'A jornada canônica já está modelada no backend via ProcessStage e CandidateJourneyStateService.',
+      '',
+      'Objetivo',
+      '',
+      'Criar automação de e-mail por etapa da jornada do candidato.',
+      '',
+      'Escopo',
+      '',
+      'integrar disparos em app/api/routes/timeline.py e app/services/candidate_journey.py',
+      'implementar notifier com idempotência por transição e retries',
+      '',
+      'Critérios de aceite',
+      '',
+      'a mesma transição não dispara o mesmo e-mail mais de uma vez',
+    ].join('\n'),
+    assert: (o, m) => {
+      assert.equal(m.isQuery, true);
+      assert.match(o, /^M=Q /);
+      assert.match(o, /\bACT=(criar|implementar|integrar|definir)\b/);
+    },
+  },
+  {
     name: 'PT literário (sem infinitivo na superfície) → verbo finito',
     input:
       'Embora a análise sintática de períodos compostos exija atenção meticulosa, a intersecção entre a semântica e a pragmática revela nuances que, frequentemente, passam despercebidas em leituras superficiais.',
