@@ -31,6 +31,11 @@
           "type": "string",
           "default": "",
           "description": "Bearer token used by telemetry requests."
+        },
+        "pith.ultraCompactEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable ultra-compact output format for local engine optimization."
         }
       }
     },

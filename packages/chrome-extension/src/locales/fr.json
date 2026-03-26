@@ -30,6 +30,7 @@
     "invisible_mode": "Mode invisible (auto-compression)",
     "response_boost": "Response boost (réponses concises)",
     "output_compress": "Output compress (compresser les réponses)",
+    "ultra_compact": "Ultra compact (query en code)",
     "copy_pith_prompt": "Copier le prompt PITH",
     "copy_and_save": "Copier et enregistrer",
     "copied": "Copié !",

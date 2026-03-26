@@ -74,6 +74,6 @@ export function isFiniteVerbSurfaceCandidate(word: string): boolean {
   if (word.startsWith('~') || /\d/.test(word) || /^[A-Z]/.test(word)) return false;
   if (ADJECTIVE_SUFFIX.test(lower)) return false;
   if (isNominalLikelyShape(lower)) return false;
-  if (/iam$/i.test(lower)) return true;
+  if (/(?:iam|ria|aria|ariam|eria|eriam|iria|iriam)$/i.test(lower)) return true;
   return false;
 }

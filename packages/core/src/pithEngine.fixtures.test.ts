@@ -4,6 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { PithEngine } from './PithEngine.ts';
+import { decodeCompactOpcode } from './engine/opcode.ts';
 
 const eng = new PithEngine();
 
@@ -119,6 +120,28 @@ const cases: Case[] = [
     },
   },
   {
+    name: 'Pergunta longa em linha única não vira compress',
+    input:
+      'Cara, imagina o seguinte: a gente tem uma rota na API que faz um processamento de imagem ou gera um PDF super pesado e, enquanto ela roda, todas as outras requisições dos outros usuários simplesmente travam e a API para de responder. Como você resolveria isso no Node.js para que esse processo não sequestre o Event Loop e o sistema continue rodando liso para todo mundo?',
+    assert: (o, m) => {
+      assert.equal(m.isQuery, true);
+      assert.match(o, /^M=Q /);
+    },
+  },
+  {
+    name: 'Pergunta longa multilinha não vira compress',
+    input: [
+      'Contexto longo com várias linhas e detalhes de produção.',
+      'A fila começa a crescer e o Node fica congestionado em horários de pico.',
+      'Temos tarefas de imagem e PDF em paralelo e bastante IO.',
+      'Como resolver isso sem sequestrar o Event Loop?'
+    ].join('\n'),
+    assert: (o, m) => {
+      assert.equal(m.isQuery, true);
+      assert.match(o, /^M=Q /);
+    },
+  },
+  {
     name: 'PT literário (sem infinitivo na superfície) → verbo finito',
     input:
       'Embora a análise sintática de períodos compostos exija atenção meticulosa, a intersecção entre a semântica e a pragmática revela nuances que, frequentemente, passam despercebidas em leituras superficiais.',
@@ -180,7 +203,7 @@ const cases: Case[] = [
 let failed = 0;
 for (const c of cases) {
   try {
-    const m = eng.optimize(c.input);
+    const m = eng.optimize(c.input, { ultraCompact: false });
     if (c.assert) c.assert(m.output, m);
     else assert.ok(m.output.length > 0);
   } catch (e) {
@@ -190,7 +213,30 @@ for (const c of cases) {
   }
 }
 
+try {
+  const m = eng.optimizeMachine('Melhorar algoritmo para aproximar linguagem de máquina com 900 segundos');
+  assert.match(m.output, /^m:/);
+  assert.match(m.output, /\|k:[A-F0-9]{8}$/);
+  assert.match(m.output, /\|x:/); // attrs slot exists in compact format
+} catch (e) {
+  console.error('FAIL: Modo ultra-compact');
+  console.error(e);
+  failed++;
+}
+
+try {
+  const full = eng.optimize('Melhorar algoritmo para aproximar linguagem de máquina com 900 segundos', { ultraCompact: false }).output;
+  const compact = eng.optimizeMachine('Melhorar algoritmo para aproximar linguagem de máquina com 900 segundos').output;
+  const decoded = decodeCompactOpcode(compact);
+  assert.equal(decoded.full, full);
+  assert.equal(decoded.isValidCrc, true);
+} catch (e) {
+  console.error('FAIL: Round-trip compact <-> full');
+  console.error(e);
+  failed++;
+}
+
 if (failed) {
   process.exit(1);
 }
-console.log(`OK ${cases.length} casos`);
+console.log(`OK ${cases.length} casos + ultra-compact + round-trip`);

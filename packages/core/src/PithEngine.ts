@@ -1,21 +1,29 @@
 import { compressPipeline, conversationalPipeline, queryPipeline } from './engine/pipelines.js';
 import { isaCrc } from './engine/opcode.js';
 
+type OptimizeOptions = {
+  ultraCompact?: boolean;
+};
+
 export class PithEngine {
-  public optimize(text: string): { output: string; noiseRemoved: number; isQuery: boolean } {
+  public optimize(text: string, options: OptimizeOptions = { ultraCompact: true }): { output: string; noiseRemoved: number; isQuery: boolean } {
     try {
       if (!text.trim()) return { output: '[PITH: No meaningful data found]', noiseRemoved: 0, isQuery: false };
 
       const mode = this.detectMode(text);
       const result = mode === 'compress'
-        ? compressPipeline(text)
+        ? compressPipeline(text, options)
         : mode === 'conversational'
-          ? conversationalPipeline(text)
-          : queryPipeline(text);
+          ? conversationalPipeline(text, options)
+          : queryPipeline(text, options);
       return { ...result, isQuery: mode !== 'compress' };
     } catch {
       return { output: text, noiseRemoved: 0, isQuery: false };
     }
+  }
+
+  public optimizeMachine(text: string): { output: string; noiseRemoved: number; isQuery: boolean } {
+    return this.optimize(text, { ultraCompact: true });
   }
 
   public compressCode(code: string): string {
@@ -28,11 +36,25 @@ export class PithEngine {
   }
 
   private detectMode(text: string): 'compress' | 'query' | 'conversational' {
-    if (text.split(/\s+/).length > 40) return 'compress';
-    if (text.split('\n').filter(l => l.trim()).length > 3) return 'compress';
-    if (/```/.test(text)) return 'compress';
-    if (/^\s*\d+\.\s/m.test(text)) return 'compress';
-    if (/^\s*[-•–]\s/m.test(text)) return 'compress';
+    const words = text.split(/\s+/).length;
+    const nonEmptyLines = text.split('\n').filter(l => l.trim()).length;
+    const qCount = (text.match(/\?/g) || []).length;
+    const hasQuestion = qCount > 0;
+    const hasCodeFence = /```/.test(text);
+    const hasNumberedList = /^\s*\d+\.\s/m.test(text);
+    const hasBulletList = /^\s*[-•–]\s/m.test(text);
+
+    // Pergunta deve priorizar extração semântica (Q/V), inclusive quando longa,
+    // exceto quando o texto é claramente código/lista.
+    if (hasQuestion && !hasCodeFence && !hasNumberedList && !hasBulletList) {
+      return qCount >= 2 ? 'conversational' : 'query';
+    }
+
+    if (words > 40) return 'compress';
+    if (nonEmptyLines > 3) return 'compress';
+    if (hasCodeFence) return 'compress';
+    if (hasNumberedList) return 'compress';
+    if (hasBulletList) return 'compress';
     if (this.isConversational(text)) return 'conversational';
     return 'query';
   }

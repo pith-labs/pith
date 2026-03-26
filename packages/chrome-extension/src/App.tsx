@@ -206,6 +206,7 @@ export default function App() {
   const [pithEnabled, setPithEnabled] = useState(true);
   const [responseBoost, setResponseBoost] = useState(true);
   const [outputCompress, setOutputCompress] = useState(true);
+  const [ultraCompactEnabled, setUltraCompactEnabled] = useState(true);
   const [shareCopied, setShareCopied] = useState(false);
 
   // Auth
@@ -215,12 +216,13 @@ export default function App() {
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get(['distilledTokens', 'pithEnabled', 'responseBoost', 'outputCompress', 'hasSeenOnboarding'], (result) => {
+      chrome.storage.local.get(['distilledTokens', 'pithEnabled', 'responseBoost', 'outputCompress', 'ultraCompactEnabled', 'hasSeenOnboarding'], (result) => {
         const tokens = result.distilledTokens || 0;
         setSavings({ distilledTokens: tokens, dollars: (tokens / 1_000_000) * 15 });
         setPithEnabled(result.pithEnabled !== false);
         setResponseBoost(result.responseBoost !== false);
         setOutputCompress(result.outputCompress !== false);
+        setUltraCompactEnabled(result.ultraCompactEnabled !== false);
         setHasSeenOnboarding(result.hasSeenOnboarding === true);
 
         loadSession().then(async (s) => {
@@ -274,7 +276,7 @@ export default function App() {
     const id = setTimeout(() => {
       void (async () => {
         try {
-          if (session?.accessToken && API_URL) {
+          if (session?.accessToken && API_URL && !ultraCompactEnabled) {
             let includeInputForMl = false;
             if (typeof chrome !== 'undefined' && chrome.storage?.local) {
               includeInputForMl = await new Promise<boolean>((r) => {
@@ -285,12 +287,12 @@ export default function App() {
             setOutput(data.output);
             setMassaGorda(data.noiseRemoved);
           } else {
-            const { output: opt, noiseRemoved } = engine.optimize(input);
+            const { output: opt, noiseRemoved } = engine.optimize(input, { ultraCompact: ultraCompactEnabled });
             setOutput(opt);
             setMassaGorda(noiseRemoved);
           }
         } catch {
-          const { output: opt, noiseRemoved } = engine.optimize(input);
+          const { output: opt, noiseRemoved } = engine.optimize(input, { ultraCompact: ultraCompactEnabled });
           setOutput(opt);
           setMassaGorda(noiseRemoved);
         } finally {
@@ -299,7 +301,7 @@ export default function App() {
       })();
     }, 300);
     return () => clearTimeout(id);
-  }, [input, session?.accessToken]);
+  }, [input, session?.accessToken, ultraCompactEnabled]);
 
   const calculateEconomy = (a: string, b: string) => Math.max(0, Math.floor((a.length - b.length) / 4));
 
@@ -454,6 +456,15 @@ export default function App() {
             className={`w-10 h-5 rounded-full transition-colors relative ${outputCompress ? 'bg-indigo-500' : 'bg-slate-600'}`}
           >
             <span className={`block w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${outputCompress ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-slate-300">{t('main.ultra_compact')}</span>
+          <button
+            onClick={() => { const n = !ultraCompactEnabled; setUltraCompactEnabled(n); if (typeof chrome !== 'undefined' && chrome.storage?.local) chrome.storage.local.set({ ultraCompactEnabled: n }); }}
+            className={`w-10 h-5 rounded-full transition-colors relative ${ultraCompactEnabled ? 'bg-indigo-500' : 'bg-slate-600'}`}
+          >
+            <span className={`block w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${ultraCompactEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
           </button>
         </div>
       </div>

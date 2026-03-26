@@ -23,16 +23,22 @@ function showBriefStatus(message: string, statusBar: vscode.StatusBarItem) {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  const cfg = vscode.workspace.getConfiguration('pith');
-  const telemetryApiUrl = String(cfg.get('telemetryApiUrl') || '').trim();
-  const telemetryToken = String(cfg.get('telemetryToken') || '').trim();
-  const telemetryEnabled = Boolean(cfg.get('telemetryEnabled', false));
+  const readSettings = () => {
+    const cfg = vscode.workspace.getConfiguration('pith');
+    return {
+      telemetryApiUrl: String(cfg.get('telemetryApiUrl') || '').trim(),
+      telemetryToken: String(cfg.get('telemetryToken') || '').trim(),
+      telemetryEnabled: Boolean(cfg.get('telemetryEnabled', false)),
+      ultraCompactEnabled: Boolean(cfg.get('ultraCompactEnabled', true)),
+    };
+  };
 
   const engine = new PithEngine();
 
   async function optimizeWithPersist(text: string): Promise<{ output: string; noiseRemoved: number }> {
+    const { telemetryEnabled, telemetryApiUrl, telemetryToken, ultraCompactEnabled } = readSettings();
     if (!telemetryEnabled || !telemetryApiUrl || !telemetryToken) {
-      return engine.optimize(text);
+      return engine.optimize(text, { ultraCompact: ultraCompactEnabled });
     }
     try {
       const res = await fetch(`${telemetryApiUrl}/v1/optimize`, {
@@ -43,11 +49,11 @@ export function activate(context: vscode.ExtensionContext) {
         },
         body: JSON.stringify({ text }),
       });
-      if (!res.ok) return engine.optimize(text);
+      if (!res.ok) return engine.optimize(text, { ultraCompact: ultraCompactEnabled });
       const j = (await res.json()) as { output: string; noiseRemoved: number };
       return { output: j.output, noiseRemoved: j.noiseRemoved };
     } catch {
-      return engine.optimize(text);
+      return engine.optimize(text, { ultraCompact: ultraCompactEnabled });
     }
   }
 

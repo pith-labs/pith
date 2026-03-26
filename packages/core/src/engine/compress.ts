@@ -1,9 +1,9 @@
 import { COMPRESS_THRESHOLD } from './constants.js';
-import { buildOpcode, computeFlags } from './opcode.js';
+import { buildOpcode, computeFlags, type OpcodeRenderOptions } from './opcode.js';
 import { abbreviate, humanNoiseLayer, patternLayer, preserveLayer, restoreAndClean } from './textLayers.js';
 import { buildFreqMap, scoreFilterLines } from './shared.js';
 
-export function compressPipeline(text: string): { output: string; noiseRemoved: number } {
+export function compressPipeline(text: string, options: OpcodeRenderOptions = {}): { output: string; noiseRemoved: number } {
   const cleaned = humanNoiseLayer(text);
   const originalWordCount = cleaned.split(/\s+/).length;
   const { text: preserved, map: preserveMap } = preserveLayer(cleaned);
@@ -17,7 +17,7 @@ export function compressPipeline(text: string): { output: string; noiseRemoved: 
   if (!final) return { output: text, noiseRemoved: 0 };
 
   const flags = computeFlags(text);
-  const finalOutput = buildOpcode('C', { payload: final }, flags);
+  const finalOutput = buildOpcode('C', { payload: final }, flags, options);
 
   const outputWordCount = final.split(/\s+/).length;
   const noise = originalWordCount > 0

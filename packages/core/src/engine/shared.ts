@@ -43,6 +43,9 @@ export function scoreWord(
   if (/(?:ando|endo|indo)$/i.test(st) && st.length >= 5) {
     score += 5;
   }
+  if (isQuestion && /(?:iam|ria|aria|ariam|eria|eriam|iria|iriam)$/i.test(st)) {
+    score += 4;
+  }
 
   if (clean.length === 3) {
     if (!/[aeiouà-ú]/i.test(clean)) score += 3;

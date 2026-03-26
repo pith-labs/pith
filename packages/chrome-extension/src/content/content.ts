@@ -22,6 +22,7 @@ function t(key: string, subs?: string[]): string {
 let pithEnabled = true;
 let responseBoost = true;
 let outputCompress = true;
+let ultraCompactEnabled = true;
 let sessionToken: string | null = null;
 
 const API_URL = import.meta.env.VITE_API_URL as string;
@@ -41,6 +42,7 @@ async function preferServerOutput(
   local: OptResult,
   sampleKind: 'user_prompt' | 'assistant_response'
 ): Promise<OptResult> {
+  if (ultraCompactEnabled) return local;
   if (!sessionToken || !API_URL) return local;
   const includeInputForMl = await getIncludeInputForMl();
   try {
@@ -69,6 +71,10 @@ async function preferServerOutput(
 
 const engine = new PithEngine();
 
+function optimizeLocal(text: string): OptResult {
+  return engine.optimize(text, { ultraCompact: ultraCompactEnabled });
+}
+
 // Load session token
 if (typeof chrome !== 'undefined' && chrome.storage?.local) {
   chrome.storage.local.get('pithSession', (result) => {
@@ -87,10 +93,11 @@ const RESPONSE_HINT_COMPRESS = isaReplyHint('NE,BL,DT');
 
 // Load saved state
 if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-  chrome.storage.local.get(['pithEnabled', 'responseBoost', 'outputCompress'], (result) => {
+  chrome.storage.local.get(['pithEnabled', 'responseBoost', 'outputCompress', 'ultraCompactEnabled'], (result) => {
     pithEnabled = result.pithEnabled !== false;
     responseBoost = result.responseBoost !== false;
     outputCompress = result.outputCompress !== false;
+    ultraCompactEnabled = result.ultraCompactEnabled !== false;
   });
 
   // Listen for toggle from popup or shortcut
@@ -104,6 +111,9 @@ if (typeof chrome !== 'undefined' && chrome.storage?.local) {
     }
     if (changes.outputCompress) {
       outputCompress = changes.outputCompress.newValue !== false;
+    }
+    if (changes.ultraCompactEnabled) {
+      ultraCompactEnabled = changes.ultraCompactEnabled.newValue !== false;
     }
     if (changes.pithSession) {
       sessionToken = changes.pithSession.newValue?.accessToken ?? null;
@@ -168,7 +178,7 @@ function runClaudeAttach() {
       if ((e as any).__lens) return;
       const text = (input as HTMLElement).innerText?.trim() ?? '';
       if (!text || text.length < 30 || isCodeHeavy(text)) return;
-      const local = engine.optimize(text);
+      const local = optimizeLocal(text);
       if (local.noiseRemoved < 5) return;
       e.preventDefault();
       e.stopPropagation();
@@ -197,7 +207,7 @@ function runClaudeAttach() {
       if (!inp) return;
       const text = inp.innerText?.trim() ?? '';
       if (!text || text.length < 30 || isCodeHeavy(text)) return;
-      const local = engine.optimize(text);
+      const local = optimizeLocal(text);
       if (local.noiseRemoved < 5) return;
       ev.preventDefault();
       ev.stopPropagation();
@@ -240,7 +250,7 @@ if (window.location.hostname.includes('claude.ai')) {
         if ((ke as any).__lens) return;
         const text = el.innerText?.trim() ?? '';
         if (!text || text.length < 30 || isCodeHeavy(text)) return;
-        const local = engine.optimize(text);
+        const local = optimizeLocal(text);
         if (local.noiseRemoved < 5) return;
         ke.preventDefault();
         ke.stopPropagation();
@@ -286,7 +296,7 @@ document.addEventListener('keydown', (e) => {
   if (!text?.trim() || text.length < 30) return;
   if (isCodeHeavy(text)) return;
 
-  const local = engine.optimize(text);
+  const local = optimizeLocal(text);
   if (local.noiseRemoved < 5) return;
 
   e.preventDefault();
@@ -352,7 +362,7 @@ document.addEventListener('click', (e) => {
   if (!text.trim() || text.length < 30) return;
   if (isCodeHeavy(text)) return;
 
-  const local = engine.optimize(text);
+  const local = optimizeLocal(text);
   if (local.noiseRemoved < 5) return;
 
   e.preventDefault();
@@ -434,7 +444,7 @@ function compressAIResponse(el: HTMLElement): void {
   if (!text || text.length < 150) return;
   if (isCodeHeavy(text)) return;
 
-  const local = engine.optimize(text);
+  const local = optimizeLocal(text);
   if (local.noiseRemoved < 10) return;
 
   processedResponses.add(el);

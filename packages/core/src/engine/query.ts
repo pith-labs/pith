@@ -1,10 +1,10 @@
 import { ADJECTIVE_SUFFIX, MAX_QUERY_NICHES, NEGATION_TOGGLE_WORD_RE, QUERY_THRESHOLD } from './constants.js';
 import { isNominalLikelyShape } from './morphology.js';
-import { buildOpcode, computeFlags } from './opcode.js';
+import { buildOpcode, computeFlags, type OpcodeRenderOptions } from './opcode.js';
 import { humanNoiseLayer } from './textLayers.js';
 import { buildFreqMap, fuseProperNouns, pickVerbalAction, scoreWord, type ScoredWord } from './shared.js';
 
-export function queryPipeline(text: string): { output: string; noiseRemoved: number } {
+export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): { output: string; noiseRemoved: number } {
   const cleaned = humanNoiseLayer(text);
   const originalWordCount = cleaned.split(/\s+/).length;
   let workText = cleaned.replace(/[?!.…]+$/g, '').trim();
@@ -31,7 +31,11 @@ export function queryPipeline(text: string): { output: string; noiseRemoved: num
   };
   const skipIndices = new Set<number>();
   let negateNext = false;
-  const isQuestion = workText.endsWith('?');
+  const isQuestion = /\?/.test(text);
+  const qActionMatch = isQuestion
+    ? workText.match(/\bcomo\s+[\p{L}\p{M}]+\s+([\p{L}\p{M}]{4,24}(?:ria|aria|eria|iria|iam|ariam|eriam|iriam))\b/iu)
+    : null;
+  const questionActionCandidate = qActionMatch?.[1]?.toLowerCase() ?? '';
 
   for (let i = 0; i < words.length; i++) {
     if (skipIndices.has(i)) continue;
@@ -81,8 +85,13 @@ export function queryPipeline(text: string): { output: string; noiseRemoved: num
 
   const picked = pickVerbalAction(fused, freq, totalWords);
   let action = picked.action;
-  const actionKeys = picked.actionKeys;
+  let actionKeys = picked.actionKeys;
   const tag = '';
+
+  if (questionActionCandidate) {
+    action = '!' + questionActionCandidate;
+    actionKeys = new Set([questionActionCandidate]);
+  }
 
   for (const item of fused) {
     const key = item.word.toLowerCase();
@@ -93,7 +102,7 @@ export function queryPipeline(text: string): { output: string; noiseRemoved: num
       attrs.push('?' + item.word);
       continue;
     }
-    if (ADJECTIVE_SUFFIX.test(item.word.toLowerCase())) {
+    if (ADJECTIVE_SUFFIX.test(item.word.toLowerCase()) && item.word.length >= 6 && !/mente$/i.test(item.word)) {
       attrs.push('?' + item.word.toLowerCase());
       continue;
     }
@@ -129,7 +138,7 @@ export function queryPipeline(text: string): { output: string; noiseRemoved: num
     niches: topNiches,
     entities,
     attrs,
-  }, flags);
+  }, flags, options);
 
   if (!finalOutput) return { output: text, noiseRemoved: 0 };
 

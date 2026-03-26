@@ -1,10 +1,10 @@
 import { ADJECTIVE_SUFFIX, MAX_QUERY_NICHES } from './constants.js';
 import { isNominalLikelyShape } from './morphology.js';
-import { buildOpcode, computeFlags } from './opcode.js';
+import { buildOpcode, computeFlags, type OpcodeRenderOptions } from './opcode.js';
 import { humanNoiseLayer } from './textLayers.js';
 import { buildFreqMap, fuseProperNouns, pickVerbalAction, scoreWord, type ScoredWord } from './shared.js';
 
-export function conversationalPipeline(text: string): { output: string; noiseRemoved: number } {
+export function conversationalPipeline(text: string, options: OpcodeRenderOptions = {}): { output: string; noiseRemoved: number } {
   const qCount = (text.match(/\?/g) || []).length;
   const negCount = (text.match(/\b(não|nao|not|never|sem|without|nem)\b|n't\b/gi) || []).length;
   let stance = '';
@@ -66,7 +66,7 @@ export function conversationalPipeline(text: string): { output: string; noiseRem
     if (seen.has(key)) continue;
     seen.add(key);
     if (/\d/.test(item.word)) { attrs.push('?' + item.word); continue; }
-    if (ADJECTIVE_SUFFIX.test(key)) { attrs.push('?' + key); continue; }
+    if (ADJECTIVE_SUFFIX.test(key) && item.word.length >= 6 && !/mente$/i.test(item.word)) { attrs.push('?' + key); continue; }
     if (/^[A-Z]/.test(item.word)) { entities.push('@' + item.word); continue; }
     if (actionKeys.has(key)) continue;
     if (!action) {
@@ -97,7 +97,7 @@ export function conversationalPipeline(text: string): { output: string; noiseRem
     niches: topNiches,
     entities,
     attrs: attrs.slice(0, 3),
-  }, flags);
+  }, flags, options);
 
   if (!finalOutput) return { output: text, noiseRemoved: 0 };
 
