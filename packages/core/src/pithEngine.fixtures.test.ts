@@ -168,6 +168,50 @@ const cases: Case[] = [
     },
   },
   {
+    name: 'Brief worker SQS prioriza ação de execução',
+    input: [
+      'Contexto',
+      '',
+      'Hoje o worker SQS trata a maior parte das exceções como retry genérico até redrive para DLQ.',
+      '',
+      'Objetivo',
+      '',
+      'Fazer com que o worker tome decisões previsíveis para falhas transitórias e definitivas.',
+      '',
+      'Escopo',
+      '',
+      'revisar a política de tratamento de exceções do worker SQS',
+      'separar erros retryable de non-retryable',
+      'melhorar logs para deixar explícito o motivo da decisão',
+      'garantir comportamento previsível para payload inválido, erro de negócio definitivo e falha transitória',
+    ].join('\n'),
+    assert: (o, m) => {
+      assert.equal(m.isQuery, true);
+      assert.match(o, /^M=Q /);
+      assert.doesNotMatch(o, /\bACT=worker\b/);
+      assert.match(o, /\bACT=(separar|classificar|tratar|revisar|implementar|integrar)\b/);
+    },
+  },
+  {
+    name: 'Brief worker SQS prioriza nichos de falha/retry',
+    input: [
+      'Contexto',
+      '',
+      'Hoje o worker SQS trata exceções com retry genérico até redrive para DLQ.',
+      '',
+      'Escopo',
+      '',
+      'separar erros retryable de non-retryable',
+      'garantir previsibilidade para falha transitória e erro definitivo',
+      'adicionar idempotência por decisão e logs com classe da falha',
+    ].join('\n'),
+    assert: o => {
+      assert.match(o, /^M=Q /);
+      assert.match(o, /\bN=.*(retryable|non-retryable|dlq|idempotencia|idempotência)/);
+      assert.doesNotMatch(o, /\bN=.*\b(worker|rodar)\b/);
+    },
+  },
+  {
     name: 'PT literário (sem infinitivo na superfície) → verbo finito',
     input:
       'Embora a análise sintática de períodos compostos exija atenção meticulosa, a intersecção entre a semântica e a pragmática revela nuances que, frequentemente, passam despercebidas em leituras superficiais.',

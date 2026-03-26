@@ -5,17 +5,23 @@ import { humanNoiseLayer } from './textLayers.js';
 import { buildFreqMap, fuseProperNouns, pickVerbalAction, scoreWord, type ScoredWord } from './shared.js';
 
 function pickBriefAction(text: string): string {
-  const sectionMatch = text.match(
-    /(?:^|\n)\s*(?:objetivo|escopo)\s*\n([\s\S]{0,1200})/i
-  );
-  const section = sectionMatch?.[1] ?? '';
-  if (!section) return '';
+  const escopo = text.match(
+    /(?:^|\n)\s*escopo\s*\n([\s\S]{0,1400}?)(?=\n\s*(?:resultado esperado|critérios? de aceite|objetivo|contexto)\s*$|$)/im
+  )?.[1] ?? '';
+  const objetivo = text.match(
+    /(?:^|\n)\s*objetivo\s*\n([\s\S]{0,800}?)(?=\n\s*(?:escopo|resultado esperado|critérios? de aceite|contexto)\s*$|$)/im
+  )?.[1] ?? '';
+  const section = escopo || objetivo;
+  if (!section.trim()) return '';
 
-  const verbs = Array.from(section.matchAll(/\b([a-zà-ÿ]{4,24}(?:ar|er|ir))\b/gi))
-    .map(m => m[1].toLowerCase());
+  const verbs = Array.from(section.matchAll(/\b([a-zà-ÿ]{4,24}(?:ar|er|ir))\b/gi)).map(m => m[1].toLowerCase());
   if (!verbs.length) return '';
 
   const priority: Record<string, number> = {
+    separar: 11,
+    classificar: 11,
+    tratar: 10,
+    revisar: 10,
     implementar: 10,
     integrar: 9,
     criar: 8,
@@ -27,19 +33,54 @@ function pickBriefAction(text: string): string {
     registrar: 5,
   };
 
+  const generic: Record<string, number> = {
+    fazer: -4,
+    melhorar: -2,
+    garantir: -2,
+  };
+
   let best = '';
   let bestScore = -Infinity;
   for (let i = 0; i < verbs.length; i++) {
     const v = verbs[i];
     const p = priority[v] ?? 0;
     const positionBoost = Math.max(0, 3 - i * 0.25);
-    const score = p + positionBoost;
+    const score = p + positionBoost + (generic[v] ?? 0);
     if (score > bestScore) {
       bestScore = score;
       best = v;
     }
   }
   return best;
+}
+
+function rankBriefNiches(words: Array<{ word: string; score: number }>, text: string): Array<{ word: string; score: number }> {
+  const lowerText = text.toLowerCase();
+  const isFailureBrief =
+    /\b(retry|retryable|non-retryable|dlq|redrive|transit[óo]ria|definitiv[oa]|idempot[êe]ncia)\b/i.test(text);
+  if (!isFailureBrief) return words;
+
+  const priority = (w: string): number => {
+    const k = w.toLowerCase();
+    let p = 0;
+    if (/^(retryable|non-retryable|transitoria|transitória|definitivo|definitiva|idempotencia|idempotência|dlq|redrive)$/.test(k)) p += 12;
+    if (/^(erro|falha|retry|payload|invalido|inválido|negocio|negócio|classe|acao|ação|logs)$/.test(k)) p += 6;
+    if (/^(worker|rodar|resultado|hoje|passar|deixar)$/.test(k)) p -= 8;
+    if (lowerText.includes(` ${k} `)) p += 1;
+    return p;
+  };
+
+  return words
+    .map(x => ({ ...x, score: x.score + priority(x.word) }))
+    .sort((a, b) => b.score - a.score);
+}
+
+function isFailureRetryBrief(text: string): boolean {
+  return /\b(retry|retryable|non-retryable|dlq|redrive|transit[óo]ria|definitiv[oa]|idempot[êe]ncia)\b/i.test(text);
+}
+
+function isFailureDomainToken(w: string): boolean {
+  return /^(retryable|non-retryable|retry|dlq|redrive|transitoria|transitória|definitivo|definitiva|idempotencia|idempotência)$/i.test(w);
 }
 
 export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): { output: string; noiseRemoved: number } {
@@ -71,6 +112,10 @@ export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): 
   let negateNext = false;
   const isQuestion = /\?/.test(text);
   const briefActionCandidate = pickBriefAction(text);
+  const isFailureBrief = isFailureRetryBrief(text);
+  const isBrief =
+    /(?:^|\n)\s*contexto\s*$/im.test(text) &&
+    /(?:^|\n)\s*(?:objetivo|escopo)\s*$/im.test(text);
   const qActionMatch = isQuestion
     ? workText.match(/\bcomo\s+[\p{L}\p{M}]+\s+([\p{L}\p{M}]{4,24}(?:ria|aria|eria|iria|iam|ariam|eriam|iriam))\b/iu)
     : null;
@@ -142,6 +187,10 @@ export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): 
       attrs.push('?' + item.word);
       continue;
     }
+    if (isFailureBrief && isFailureDomainToken(item.word)) {
+      niches.push({ word: '#' + item.word.toLowerCase(), score: item.score + 20 });
+      continue;
+    }
     if (
       ADJECTIVE_SUFFIX.test(item.word.toLowerCase()) &&
       item.word.length >= 8 &&
@@ -155,12 +204,13 @@ export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): 
       /^[A-Z]/.test(item.word) &&
       item.word.length >= 3 &&
       !isInfinitiveCandidate(item.word) &&
-      !/^(contexto|objetivo|escopo|resultado|criterios?)$/i.test(item.word)
+      !/^(contexto|objetivo|escopo|resultado|criterios?|hoje)$/i.test(item.word)
     ) {
       entities.push('@' + item.word);
       continue;
     }
     if (actionKeys.has(key)) continue;
+    if (isBrief && /^(fazer|melhorar|garantir|revisar|resultado|indicar|deixar|passar|hoje|contexto)$/i.test(item.word)) continue;
     if (!action) {
       if (!isNominalLikelyShape(key)) {
         action = '!' + item.word;
@@ -172,8 +222,8 @@ export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): 
     }
   }
 
-  const topNiches = niches
-    .sort((a, b) => b.score - a.score)
+  const topNiches = rankBriefNiches(niches, text)
+    .filter(n => !(isFailureBrief && /^(#?worker|#?rodar|#?hoje|#?contexto)$/i.test(n.word)))
     .slice(0, MAX_QUERY_NICHES)
     .map(n => n.word);
 
