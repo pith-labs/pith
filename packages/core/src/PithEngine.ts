@@ -79,9 +79,11 @@ export class PithEngine {
 
     const techSignals = [
       /(?:^|\s)(app|src|packages)\/[^\s]+/i.test(text),
+      /\b[a-z_]+\.(?:py|ts|js)\b/i.test(text),
       /\b(send_[a-z_]+)\b/i.test(text),
       /\b(?:idempot[eê]ncia|idempotency|retry|reprocessamentos?)\b/i.test(text),
       /\b(?:eventos?|transiç(?:ão|oes)|transition|notifier|orquestraç(?:ão|oes))\b/i.test(text),
+      /\b(?:dependency|dependencies|provider|providers|repository|repositories|service|services|factory|factories|depends)\b/i.test(text),
     ].filter(Boolean).length;
 
     return sections >= 2 && techSignals >= 1;

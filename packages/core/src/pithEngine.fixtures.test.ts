@@ -212,6 +212,32 @@ const cases: Case[] = [
     },
   },
   {
+    name: 'Brief de dependencies/providers não vira compress',
+    input: [
+      'Contexto validado no código',
+      '',
+      'Hoje existem dependency providers repetidos entre rotas e serviços.',
+      'get_candidate_repository em múltiplos módulos de rota.',
+      'get_cognito_service em candidate.py e auth.py.',
+      '',
+      'Objetivo',
+      '',
+      'Consolidar dependency providers compartilhados em módulos por domínio.',
+      '',
+      'Resultado esperado',
+      '',
+      'Menos duplicação entre rotas e serviços.',
+      '',
+      'Critérios de aceite',
+      '',
+      'A refatoração reduz duplicação real e mantém os Depends(...) legíveis nas rotas.',
+    ].join('\n'),
+    assert: (o, m) => {
+      assert.equal(m.isQuery, true);
+      assert.match(o, /^M=Q /);
+    },
+  },
+  {
     name: 'PT literário (sem infinitivo na superfície) → verbo finito',
     input:
       'Embora a análise sintática de períodos compostos exija atenção meticulosa, a intersecção entre a semântica e a pragmática revela nuances que, frequentemente, passam despercebidas em leituras superficiais.',

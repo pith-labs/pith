@@ -114,8 +114,10 @@ export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): 
   const briefActionCandidate = pickBriefAction(text);
   const isFailureBrief = isFailureRetryBrief(text);
   const isBrief =
-    /(?:^|\n)\s*contexto\s*$/im.test(text) &&
-    /(?:^|\n)\s*(?:objetivo|escopo)\s*$/im.test(text);
+    /(?:^|\n)\s*contexto\b/im.test(text) &&
+    /(?:^|\n)\s*(?:objetivo|escopo)\b/im.test(text);
+  const isGenericBriefToken = (w: string): boolean =>
+    /^(contexto|hoje|resultado|objetivo|escopo|criterios?|menos|validado|codigo|código)$/i.test(w);
   const qActionMatch = isQuestion
     ? workText.match(/\bcomo\s+[\p{L}\p{M}]+\s+([\p{L}\p{M}]{4,24}(?:ria|aria|eria|iria|iam|ariam|eriam|iriam))\b/iu)
     : null;
@@ -206,6 +208,7 @@ export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): 
       !isInfinitiveCandidate(item.word) &&
       !/^(contexto|objetivo|escopo|resultado|criterios?|hoje)$/i.test(item.word)
     ) {
+      if (isBrief && isGenericBriefToken(item.word)) continue;
       entities.push('@' + item.word);
       continue;
     }
@@ -223,6 +226,7 @@ export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): 
   }
 
   const topNiches = rankBriefNiches(niches, text)
+    .filter(n => !(isBrief && isGenericBriefToken(n.word.replace(/^#/, ''))))
     .filter(n => !(isFailureBrief && /^(#?worker|#?rodar|#?hoje|#?contexto)$/i.test(n.word)))
     .slice(0, MAX_QUERY_NICHES)
     .map(n => n.word);
