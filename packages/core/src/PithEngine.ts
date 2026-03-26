@@ -43,26 +43,28 @@ export class PithEngine {
     const hasCodeFence = /```/.test(text);
     const hasNumberedList = /^\s*\d+\.\s/m.test(text);
     const hasBulletList = /^\s*[-•–]\s/m.test(text);
+    const looksLikeSpec = this.looksLikeSpecBrief(text);
 
-    // Pergunta deve priorizar extração semântica (Q/V), inclusive quando longa,
-    // exceto quando o texto é claramente código/lista.
-    if (hasQuestion && !hasCodeFence && !hasNumberedList && !hasBulletList) {
-      return qCount >= 2 ? 'conversational' : 'query';
-    }
+    const queryScore =
+      (hasQuestion ? 4 : 0) +
+      (looksLikeSpec ? 5 : 0) +
+      (!hasCodeFence && !hasNumberedList && !hasBulletList ? 1 : 0);
 
-    // Especificação/brief técnico longo (contexto/objetivo/escopo/aceite + paths/eventos)
-    // deve virar query semântica, não compressão textual.
-    if (this.looksLikeSpecBrief(text) && !hasCodeFence) {
-      return 'query';
-    }
+    const conversationalScore =
+      (qCount >= 2 ? 6 : 0) +
+      (qCount >= 2 && nonEmptyLines <= 4 ? 1 : 0);
 
-    if (words > 40) return 'compress';
-    if (nonEmptyLines > 3) return 'compress';
-    if (hasCodeFence) return 'compress';
-    if (hasNumberedList) return 'compress';
-    if (hasBulletList) return 'compress';
-    if (this.isConversational(text)) return 'conversational';
-    return 'query';
+    const compressScore =
+      (words > 40 ? 3 : 0) +
+      (nonEmptyLines > 3 ? 2 : 0) +
+      (hasCodeFence ? 5 : 0) +
+      (hasNumberedList ? 3 : 0) +
+      (hasBulletList ? 3 : 0) +
+      (!hasQuestion && !looksLikeSpec ? 1 : 0);
+
+    if (conversationalScore >= queryScore && conversationalScore >= compressScore) return 'conversational';
+    if (queryScore >= compressScore) return 'query';
+    return 'compress';
   }
 
   private looksLikeSpecBrief(text: string): boolean {
@@ -89,9 +91,4 @@ export class PithEngine {
     return sections >= 2 && techSignals >= 1;
   }
 
-  // Conversational: só sinal estrutural (≥2 '?'), sem léxico de pronome/tópico
-  private isConversational(text: string): boolean {
-    const qCount = (text.match(/\?/g) || []).length;
-    return qCount >= 2;
-  }
 }

@@ -238,6 +238,32 @@ const cases: Case[] = [
     },
   },
   {
+    name: 'Chat-like: pedido direto técnico vira query',
+    input:
+      'to com erro no worker de fila, separa retryable/non-retryable e me diz como organizar providers sem virar deps.py gigante',
+    assert: (o, m) => {
+      assert.equal(m.isQuery, true);
+      assert.match(o, /^M=Q /);
+    },
+  },
+  {
+    name: 'Chat-like: pergunta longa coloquial vira query',
+    input:
+      'mano, no node ta travando geral quando rola tarefa pesada de pdf/imagem, como eu desacoplo isso sem quebrar o resto da api?',
+    assert: (o, m) => {
+      assert.equal(m.isQuery, true);
+      assert.match(o, /^M=Q /);
+    },
+  },
+  {
+    name: 'Chat-like: lista de itens continua compress',
+    input: '- mover providers\n- reduzir duplicação\n- manter Depends legível\n- cobrir com testes',
+    assert: (o, m) => {
+      assert.equal(m.isQuery, false);
+      assert.match(o, /^M=C /);
+    },
+  },
+  {
     name: 'PT literário (sem infinitivo na superfície) → verbo finito',
     input:
       'Embora a análise sintática de períodos compostos exija atenção meticulosa, a intersecção entre a semântica e a pragmática revela nuances que, frequentemente, passam despercebidas em leituras superficiais.',
