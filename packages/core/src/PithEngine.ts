@@ -53,6 +53,7 @@ export class PithEngine {
     const hasNumberedList = /^\s*\d+\.\s/m.test(text);
     const hasBulletList = /^\s*[-•–]\s/m.test(text);
     const looksLikeSpec = this.looksLikeSpecBrief(text);
+    const strongCompress = this.hasStrongCompressEvidence(text, words, nonEmptyLines, hasQuestion, looksLikeSpec);
 
     const queryScore =
       (hasQuestion ? 4 : 0) +
@@ -82,6 +83,11 @@ export class PithEngine {
     const confidence = top.score <= 0 ? 0 : (top.score - second.score) / top.score;
     const uncertain = confidence < 0.22;
 
+    // Hard-guarantee: query-first unless compress evidence is strong and unambiguous.
+    if (top.mode === 'compress' && !strongCompress) {
+      return { mode: 'query', confidence, uncertain: true };
+    }
+
     // Fail-safe: when uncertain, prefer semantic extraction over destructive compression.
     if (uncertain && top.mode === 'compress') {
       return { mode: 'query', confidence, uncertain: true };
@@ -92,6 +98,26 @@ export class PithEngine {
     }
 
     return { mode: top.mode, confidence, uncertain };
+  }
+
+  private hasStrongCompressEvidence(
+    text: string,
+    words: number,
+    nonEmptyLines: number,
+    hasQuestion: boolean,
+    looksLikeSpec: boolean
+  ): boolean {
+    const hasCodeFence = /```/.test(text);
+    const hasList = /^\s*[-•–]\s/m.test(text) || /^\s*\d+\.\s/m.test(text);
+    const manyLines = nonEmptyLines >= 4;
+    const veryLong = words >= 45;
+
+    if (hasQuestion || looksLikeSpec) return false;
+    if (hasCodeFence) return true;
+    if (hasList && nonEmptyLines >= 3) return true;
+    if (manyLines) return true;
+    if (veryLong) return true;
+    return false;
   }
 
   private looksLikeSpecBrief(text: string): boolean {

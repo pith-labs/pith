@@ -273,6 +273,30 @@ const cases: Case[] = [
     },
   },
   {
+    name: 'Hard-guarantee: sem evidência forte não comprime',
+    input:
+      'texto longo com detalhes técnicos e opinião mista sobre arquitetura, trade-offs, impacto em custo e manutenção sem pergunta explícita',
+    assert: (o, m) => {
+      assert.equal(m.isQuery, true);
+      assert.match(o, /^M=Q /);
+    },
+  },
+  {
+    name: 'Hard-guarantee: evidência forte de lista comprime',
+    input: [
+      'Plano',
+      '- item 1 detalhado',
+      '- item 2 detalhado',
+      '- item 3 detalhado',
+      '- item 4 detalhado',
+      '- item 5 detalhado',
+    ].join('\n'),
+    assert: (o, m) => {
+      assert.equal(m.isQuery, false);
+      assert.match(o, /^M=C /);
+    },
+  },
+  {
     name: 'PT literário (sem infinitivo na superfície) → verbo finito',
     input:
       'Embora a análise sintática de períodos compostos exija atenção meticulosa, a intersecção entre a semântica e a pragmática revela nuances que, frequentemente, passam despercebidas em leituras superficiais.',
