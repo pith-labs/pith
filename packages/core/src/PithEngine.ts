@@ -53,16 +53,20 @@ export class PithEngine {
     const hasNumberedList = /^\s*\d+\.\s/m.test(text);
     const hasBulletList = /^\s*[-•–]\s/m.test(text);
     const looksLikeSpec = this.looksLikeSpecBrief(text);
+    const looksTechnicalQuery =
+      /\b(llm|token|tokens|prompt|output|input|api|backend|worker|sqs|dlq|retry|idempot[eê]ncia)\b/i.test(text);
     const strongCompress = this.hasStrongCompressEvidence(text, words, nonEmptyLines, hasQuestion, looksLikeSpec);
 
     const queryScore =
       (hasQuestion ? 4 : 0) +
       (looksLikeSpec ? 5 : 0) +
-      (!hasCodeFence && !hasNumberedList && !hasBulletList ? 1 : 0);
+      (!hasCodeFence && !hasNumberedList && !hasBulletList ? 1 : 0) +
+      (looksTechnicalQuery ? 2 : 0);
 
     const conversationalScore =
       (qCount >= 2 ? 6 : 0) +
-      (qCount >= 2 && nonEmptyLines <= 4 ? 1 : 0);
+      (qCount >= 2 && nonEmptyLines <= 4 ? 1 : 0) +
+      (!looksTechnicalQuery ? 1 : -3);
 
     const compressScore =
       (words > 40 ? 3 : 0) +

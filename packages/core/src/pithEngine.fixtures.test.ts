@@ -273,6 +273,16 @@ const cases: Case[] = [
     },
   },
   {
+    name: 'Pergunta metacognitiva de tokens/LLM fica em query',
+    input:
+      'dúvida sincera, mesmo apenas manipulando o prompt que é o caso da engine, nós realmente temos econmia de tokens? uma vez que o pensamento em si do LLM e o output nós não manipulamos?',
+    assert: (o, m) => {
+      assert.equal(m.isQuery, true);
+      assert.match(o, /^M=Q /);
+      assert.match(o, /\bE=.*llm/);
+    },
+  },
+  {
     name: 'Hard-guarantee: sem evidência forte não comprime',
     input:
       'texto longo com detalhes técnicos e opinião mista sobre arquitetura, trade-offs, impacto em custo e manutenção sem pergunta explícita',
