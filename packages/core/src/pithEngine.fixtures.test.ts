@@ -283,6 +283,16 @@ const cases: Case[] = [
     },
   },
   {
+    name: 'PT: pergunta "qual o nome do site" preserva domínio (ACT + N + P)',
+    input: 'qual o nome do site que tira a media de gasto com marketing',
+    assert: o => {
+      assert.match(o, /^M=Q /);
+      assert.match(o, /\bACT=identificar\b/);
+      assert.match(o, /\bN=.*marketing/);
+      assert.match(o, /\bP=marketing,gasto,media,nome_site\b/);
+    },
+  },
+  {
     name: 'Hard-guarantee: sem evidência forte não comprime',
     input:
       'texto longo com detalhes técnicos e opinião mista sobre arquitetura, trade-offs, impacto em custo e manutenção sem pergunta explícita',

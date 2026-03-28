@@ -83,6 +83,51 @@ function isFailureDomainToken(w: string): boolean {
   return /^(retryable|non-retryable|retry|dlq|redrive|transitoria|transitória|definitivo|definitiva|idempotencia|idempotência)$/i.test(w);
 }
 
+/** Pergunta de identificação (nome/site/ferramenta), não ação de domínio tipo "marketing". */
+function isNameLookupQuestion(text: string): boolean {
+  const t = text.toLowerCase();
+  return (
+    /\bqual\s+(?:é\s+)?(?:o\s+|a\s+)?(?:nome|site|ferramenta|plataforma|ferramentas)\b/i.test(text) ||
+    /\b(?:que|qual)\s+(?:é\s+)?(?:o\s+|a\s+)?nome\s+(?:do|da|de)\s+/i.test(text) ||
+    /\b(?:sabe|sabem|algu[eé]m\s+sabe)\s+(?:qual|o\s+que)\s+(?:é\s+)?(?:o\s+)?(?:nome|site)\b/i.test(t)
+  );
+}
+
+const NAME_LOOKUP_STOP = new Set([
+  'que', 'qual', 'o', 'a', 'os', 'as', 'um', 'uma', 'do', 'da', 'dos', 'das', 'de', 'no', 'na', 'nos', 'nas',
+  'com', 'por', 'pelo', 'pela', 'pra', 'pro', 'e', 'ou', 'site', 'nome', 'tira', 'tire', 'tiram',
+  'voce', 'você', 'cujo', 'cuja', 'esse', 'essa', 'isso', 'este', 'esta',
+]);
+
+function rankNameLookupNiches(words: Array<{ word: string; score: number }>): Array<{ word: string; score: number }> {
+  return words
+    .map(x => {
+      const k = x.word.replace(/^#/, '').toLowerCase();
+      let bonus = 0;
+      if (/^(marketing|gasto|gastos|media|medias|média|médias|benchmark|spend|métrica|métricas|metrica|metricas)$/i.test(k)) {
+        bonus += 22;
+      }
+      if (NAME_LOOKUP_STOP.has(k)) bonus -= 35;
+      return { ...x, score: x.score + bonus };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
+/** Resumo lexical para P (forma, sem depender do opcode N). */
+function pickNameLookupPayload(text: string): string {
+  const n = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const parts: string[] = [];
+  if (/\bmarketing\b/.test(n)) parts.push('marketing');
+  if (/\bgastos?\b/.test(n)) parts.push('gasto');
+  if (/\bmedias?\b/.test(n)) parts.push('media');
+  if (/\b(benchmark|spend)\b/.test(n)) parts.push('benchmark');
+  if (/\bsite\b/.test(n)) parts.push('nome_site');
+  return parts.join(',');
+}
+
 export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): { output: string; noiseRemoved: number } {
   const cleaned = humanNoiseLayer(text);
   const originalWordCount = cleaned.split(/\s+/).length;
@@ -116,6 +161,7 @@ export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): 
   const isBrief =
     /(?:^|\n)\s*contexto\b/im.test(text) &&
     /(?:^|\n)\s*(?:objetivo|escopo)\b/im.test(text);
+  const nameLookup = isNameLookupQuestion(text) && !isBrief;
   const isGenericBriefToken = (w: string): boolean =>
     /^(contexto|hoje|resultado|objetivo|escopo|criterios?|menos|validado|codigo|código)$/i.test(w);
   const qActionMatch = isQuestion
@@ -174,7 +220,7 @@ export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): 
   let actionKeys = picked.actionKeys;
   const tag = '';
 
-  const forcedAction = briefActionCandidate || questionActionCandidate;
+  const forcedAction = briefActionCandidate || (nameLookup ? 'identificar' : '') || questionActionCandidate;
   if (forcedAction) {
     action = '!' + forcedAction;
     actionKeys = new Set([forcedAction]);
@@ -225,14 +271,22 @@ export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): 
     }
   }
 
-  const topNiches = rankBriefNiches(niches, text)
+  let rankedNiches = rankBriefNiches(niches, text);
+  if (nameLookup) rankedNiches = rankNameLookupNiches(rankedNiches);
+  const topNiches = rankedNiches
     .filter(n => !(isBrief && isGenericBriefToken(n.word.replace(/^#/, ''))))
     .filter(n => !(isFailureBrief && /^(#?worker|#?rodar|#?hoje|#?contexto)$/i.test(n.word)))
+    .filter(n => {
+      if (!nameLookup) return true;
+      const k = n.word.replace(/^#/, '').toLowerCase();
+      return !NAME_LOOKUP_STOP.has(k);
+    })
     .slice(0, MAX_QUERY_NICHES)
     .map(n => n.word);
 
   const spec = { goal: '_' as const, cstr: '_' as const, proto: '_' as const };
   const flags = computeFlags(text);
+  const lookupPayload = nameLookup ? pickNameLookupPayload(text) : '';
   const finalOutput = buildOpcode('Q', {
     tag,
     action,
@@ -242,6 +296,7 @@ export function queryPipeline(text: string, options: OpcodeRenderOptions = {}): 
     niches: topNiches,
     entities,
     attrs,
+    payload: lookupPayload || undefined,
   }, flags, options);
 
   if (!finalOutput) return { output: text, noiseRemoved: 0 };
