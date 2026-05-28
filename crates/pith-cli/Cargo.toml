@@ -1,0 +1,19 @@
+[package]
+name = "pith"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Pith CLI in Rust"
+
+[[bin]]
+name = "pith"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+walkdir.workspace = true
+chrono.workspace = true
+pith-core = { path = "../pith-core" }

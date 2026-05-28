@@ -1,0 +1,12 @@
+[package]
+name = "pith-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Pith core engine for prompt/token distillation"
+
+[lib]
+name = "pith_core"
+path = "src/lib.rs"

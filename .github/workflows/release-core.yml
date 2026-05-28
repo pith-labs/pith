@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version for @pith/core (e.g. 1.1.0)"
+        description: "Version for pith-core (e.g. 2.1.0)"
         required: true
 
 permissions:
@@ -15,22 +15,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run -w @pith/core test
-      - name: Update core package version
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --workspace
+      - name: Update core crate version
         run: |
-          node -e "const fs=require('fs');const p='packages/core/package.json';const j=JSON.parse(fs.readFileSync(p,'utf8'));j.version='${{ github.event.inputs.version }}';fs.writeFileSync(p, JSON.stringify(j,null,2)+'\\n');"
+          sed -i 's/^version\.workspace = true$/version = "${{ github.event.inputs.version }}"/' crates/pith-core/Cargo.toml
       - name: Commit and tag
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git add packages/core/package.json
+          git add crates/pith-core/Cargo.toml
           git commit -m "release(core): v${{ github.event.inputs.version }}"
           git tag core-v${{ github.event.inputs.version }}
           git push origin HEAD
@@ -39,5 +37,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: core-v${{ github.event.inputs.version }}
-          name: "@pith/core v${{ github.event.inputs.version }}"
+          name: "pith-core v${{ github.event.inputs.version }}"
           generate_release_notes: true

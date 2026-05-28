@@ -1,13 +1,9 @@
 {
   "name": "pith",
   "private": true,
-  "workspaces": [
-    "packages/core",
-    "packages/cli"
-  ],
   "scripts": {
-    "test": "npm run -w @pith/core test",
-    "benchmark": "npm run -w @pith/core benchmark",
-    "build": "npm run -w @pith/cli build"
+    "test": "cargo test",
+    "build": "cargo build --release",
+    "benchmark": "echo 'Benchmark moved to Rust engine (TODO: criterion suite)'"
   }
 }
