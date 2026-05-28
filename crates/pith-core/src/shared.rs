@@ -1,4 +1,4 @@
-use crate::constants::{is_adjective_suffix, is_verb_conjugated, NEGATION_WORDS};
+use crate::constants::{is_adjective_suffix, is_verb_conjugated, negation_words};
 use crate::morphology::{is_finite_verb_surface_candidate, is_gerund_candidate, is_infinitive_candidate, is_nominal_likely_shape, is_romance_infinitive_shape};
 use crate::text_layers::{is_header, is_pattern_symbol_token};
 use std::collections::{HashMap, HashSet};
@@ -186,7 +186,7 @@ pub fn score_filter_lines(text: &str, freq: &HashMap<String, usize>, total_words
                 }
                 continue;
             }
-            if NEGATION_WORDS.iter().any(|n| clean.eq_ignore_ascii_case(n)) {
+            if negation_words().iter().any(|n| clean.eq_ignore_ascii_case(n)) {
                 negate_next = !negate_next;
                 continue;
             }

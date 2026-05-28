@@ -1,0 +1,40 @@
+{
+  "thresholds": {
+    "query": 5,
+    "compress": 4,
+    "max_query_niches": 4
+  },
+  "morphology": {
+    "adjective_suffixes": ["ário","ária","oso","osa","ivo","iva","ável","ível","inho","inha","ante","ente","udo","uda","ary","ous","ive","able","ible","ful","less","ical","ial","ular","ural","olar","lear","quer","quier","ico","ica"],
+    "verb_conjugated_suffixes": ["ando","endo","indo","aram","avam","eve","rá","rão","sse","mos","reis"],
+    "negation_words": ["não","nao","not","never","nem"]
+  },
+  "abbreviations": {
+    "categorias": "cats",
+    "categories": "cats",
+    "produtos": "prods",
+    "products": "prods",
+    "configuração": "config",
+    "configuracao": "config",
+    "configuration": "config",
+    "desenvolvimento": "dev",
+    "development": "dev",
+    "documentação": "docs",
+    "documentacao": "docs",
+    "documentation": "docs",
+    "aplicação": "app",
+    "aplicacao": "app",
+    "application": "app",
+    "implementação": "impl",
+    "implementacao": "impl",
+    "implementation": "impl"
+  },
+  "domain_weights": {
+    "backend": {"api": 1.0, "http": 1.0, "route": 0.8, "endpoint": 0.8, "storage": 0.6, "transport": 0.7},
+    "async-processing": {"worker": 1.1, "queue": 1.1, "retry": 1.0, "dlq": 1.0, "transport": 0.8},
+    "testing": {"test": 1.0, "coverage": 0.9, "assert": 0.8},
+    "data": {"sql": 1.0, "migration": 1.0, "storage": 0.8},
+    "llm": {"prompt": 1.0, "token": 1.1, "semantic": 0.8, "context": 0.8},
+    "frontend": {"ui": 1.0, "ux": 1.0, "react": 0.9, "vite": 0.9}
+  }
+}

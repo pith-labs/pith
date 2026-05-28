@@ -1,4 +1,5 @@
 use crate::types::{Constraints, DomainScore, Intent, IntentIR, Signals, Slots, Source};
+use crate::constants::domain_weights;
 use regex::Regex;
 use std::collections::{BTreeSet, HashMap};
 
@@ -64,26 +65,33 @@ fn pick_action(text: &str) -> String {
 }
 
 fn score_domains(text: &str) -> Vec<DomainScore> {
-    let patterns = [
-        (r"\b(api|backend|endpoint|route|http)\b", "backend", 3),
-        (r"\b(frontend|react|vite|ui|ux)\b", "frontend", 0),
-        (r"\b(worker|queue|sqs|cron|job|retry|dlq)\b", "async-processing", 4),
-        (r"\b(test|vitest|jest|pytest|coverage)\b", "testing", 0),
-        (r"\b(sql|postgres|database|db|migration)\b", "data", 0),
-        (r"\b(llm|prompt|tokens?|openai|claude)\b", "llm", 3),
-    ];
-
     let lower = text.to_lowercase();
+    let tokens = lower
+        .split(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_'))
+        .filter(|t| !t.is_empty())
+        .collect::<Vec<_>>();
+
     let mut out = Vec::new();
-    for (re, domain, bonus) in patterns {
-        if Regex::new(re).expect("valid regex").is_match(text) {
-            let mut score = 5 + bonus;
-            if lower.contains(domain) {
-                score += 1;
+    for (domain, weights) in domain_weights() {
+        let mut score = 0.0f32;
+        for token in &tokens {
+            if let Some(w) = weights.get(*token) {
+                score += *w;
             }
+        }
+        if domain == "backend" && (lower.contains("api") || lower.contains("http")) {
+            score += 1.0;
+        }
+        if domain == "async-processing" && (lower.contains("retry") || lower.contains("dlq")) {
+            score += 1.2;
+        }
+        if domain == "llm" && (lower.contains("token") || lower.contains("prompt")) {
+            score += 1.0;
+        }
+        if score > 0.6 {
             out.push(DomainScore {
-                name: domain.to_string(),
-                score,
+                name: domain.clone(),
+                score: (score * 4.0).round() as i32 + 3,
             });
         }
     }

@@ -30,6 +30,8 @@ pith prompt "How can I reduce token usage safely?"
 pith dev < build.log
 pith run cargo test
 pith brain ./notes --out pith-brain.md
+pith feedback record --input "Refactor retry worker" --contains retry,idempotency --mode query
+pith feedback eval --input feedback/records.jsonl
 ```
 
 ## Build & Test
@@ -43,6 +45,7 @@ cargo build --release --workspace
 
 - `crates/pith-core`: engine implementation
 - `crates/pith-cli`: terminal application
+- `crates/pith-core/config/default_weights.json`: externalized heuristic/domain weights
 
 ## Open Source
 

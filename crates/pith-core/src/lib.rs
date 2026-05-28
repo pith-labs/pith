@@ -2,6 +2,7 @@ mod dev_output;
 mod constants;
 mod domain;
 mod engine;
+mod eval;
 mod ir;
 mod morphology;
 mod opcode;
@@ -9,9 +10,11 @@ mod pipelines;
 mod shared;
 mod text_layers;
 mod types;
+mod weights;
 
 pub use dev_output::DevOutputOptions;
 pub use engine::PithEngine;
+pub use eval::{evaluate_records, EvalReport, FeedbackRecord};
 pub use ir::{generate_machine_prompt, parse_intent_ir};
 pub use opcode::{compute_flags, generate_opcode_from_ir, isa_crc};
 pub use types::{
