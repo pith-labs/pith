@@ -53,6 +53,19 @@ cargo build --release --workspace
 - Stable output now includes an AI-oriented intermediate representation (`AIF/1`) to keep semantics explicit for downstream models.
 - Lexical rules remain fallback only; routing and shaping prioritize structure + intent signals.
 
+## Adapter Benchmark
+
+Run balanced evaluation by input kind:
+
+```bash
+cargo run -p pith -- feedback eval --input feedback/adapter-balanced-v1.jsonl
+```
+
+The report prints global metrics plus per-kind quality:
+
+- `contains_score` (global)
+- `kind=<...> contains_score` (adapter-level)
+
 ## Open Source
 
 - PRs are welcome.
