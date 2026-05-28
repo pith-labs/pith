@@ -1,1 +1,3 @@
-export { PithEngine } from './PithEngine.js';
+export { PithEngine, type OptimizeOptions } from './PithEngine.js';
+export type { PithResultV1, StableOptimizeOptions } from './types.js';
+export type { PithPlugin, PithPluginHooks, PluginOptimizeInput } from './plugins.js';

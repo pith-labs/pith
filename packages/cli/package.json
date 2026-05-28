@@ -1,0 +1,21 @@
+{
+  "name": "@pith/cli",
+  "version": "1.0.0",
+  "description": "Pith CLI — brain export, prompt optimize, dev output shrink",
+  "type": "module",
+  "bin": {
+    "pith": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "esbuild src/cli.ts --bundle --banner:js='#!/usr/bin/env node' --outfile=dist/cli.js --platform=node --format=esm",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@pith/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "esbuild": "^0.20.2",
+    "typescript": "^5.4.5"
+  }
+}

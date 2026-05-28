@@ -1,25 +1,76 @@
 import { compressPipeline, conversationalPipeline, queryPipeline } from './engine/pipelines.js';
+import { devOutputPipeline, type DevOutputOptions } from './engine/devOutput.js';
 import { isaCrc } from './engine/opcode.js';
+import type { PithPlugin, PithPluginHooks } from './plugins.js';
+import type { PithResultV1, StableOptimizeOptions } from './types.js';
 
-type OptimizeOptions = {
+export type OptimizeOptions = {
   ultraCompact?: boolean;
+  /** `auto` = deteção atual; `compress` útil p.ex. vaults Obsidian (notas longas viram query sem isto). */
+  mode?: 'auto' | 'compress' | 'query' | 'conversational';
 };
 
 export class PithEngine {
+  private readonly plugins: PithPlugin[];
+
+  public constructor(plugins: PithPlugin[] = []) {
+    this.plugins = plugins;
+  }
+
   public optimize(text: string, options: OptimizeOptions = { ultraCompact: true }): { output: string; noiseRemoved: number; isQuery: boolean } {
     try {
       if (!text.trim()) return { output: '[PITH: No meaningful data found]', noiseRemoved: 0, isQuery: false };
 
-      const mode = this.detectMode(text);
-      const result = mode === 'compress'
-        ? compressPipeline(text, options)
-        : mode === 'conversational'
-          ? conversationalPipeline(text, options)
-          : queryPipeline(text, options);
-      return { ...result, isQuery: mode !== 'compress' };
+      const mode =
+        options.mode && options.mode !== 'auto' ? options.mode : this.detectMode(text);
+      const pre = this.runPluginPre({ text, mode, options });
+      const result =
+        pre.mode === 'compress'
+          ? compressPipeline(pre.text, pre.options)
+          : pre.mode === 'conversational'
+            ? conversationalPipeline(pre.text, pre.options)
+            : queryPipeline(pre.text, pre.options);
+      const post = this.runPluginPost({
+        text: pre.text,
+        mode: pre.mode,
+        options: pre.options,
+        output: result.output,
+      });
+      const mergedResult = { ...result, output: post.output };
+      return { ...mergedResult, isQuery: pre.mode !== 'compress' };
     } catch {
       return { output: text, noiseRemoved: 0, isQuery: false };
     }
+  }
+
+  /** Stable, versioned response contract for SDK/API consumers. */
+  public optimizeStable(text: string, options: StableOptimizeOptions = {}): PithResultV1 {
+    const startedAt = Date.now();
+    const mode = options.mode && options.mode !== 'auto' ? options.mode : this.detectMode(text);
+    const legacy = this.optimize(text, options);
+    const endedAt = Date.now();
+    const explanations: string[] = [];
+    if (options.explain) {
+      explanations.push(`mode=${mode}`);
+      explanations.push(`isQuery=${legacy.isQuery}`);
+      explanations.push(`noiseRemoved=${legacy.noiseRemoved}`);
+    }
+    return {
+      schemaVersion: '1.0.0',
+      mode,
+      output: legacy.output,
+      noiseRemoved: legacy.noiseRemoved,
+      isQuery: legacy.isQuery,
+      meta: {
+        elapsedMs: Math.max(0, endedAt - startedAt),
+        explain: explanations,
+      },
+    };
+  }
+
+  /** Saída de terminal / logs / ferramentas — sem pipeline lexical de prompts. */
+  public optimizeDevOutput(text: string, options: DevOutputOptions = {}): { output: string; noiseRemoved: number } {
+    return devOutputPipeline(text, options);
   }
 
   public optimizeMachine(text: string): { output: string; noiseRemoved: number; isQuery: boolean } {
@@ -148,4 +199,25 @@ export class PithEngine {
     return sections >= 2 && techSignals >= 1;
   }
 
+  private runPluginPre(input: { text: string; mode: 'compress' | 'query' | 'conversational'; options: OptimizeOptions }): {
+    text: string;
+    mode: 'compress' | 'query' | 'conversational';
+    options: OptimizeOptions;
+  } {
+    return this.plugins.reduce((acc, p) => {
+      const hook = p.hooks?.beforeOptimize as PithPluginHooks['beforeOptimize'] | undefined;
+      if (!hook) return acc;
+      return hook(acc) ?? acc;
+    }, input);
+  }
+
+  private runPluginPost(input: { text: string; mode: 'compress' | 'query' | 'conversational'; options: OptimizeOptions; output: string }): {
+    output: string;
+  } {
+    return this.plugins.reduce((acc, p) => {
+      const hook = p.hooks?.afterOptimize as PithPluginHooks['afterOptimize'] | undefined;
+      if (!hook) return acc;
+      return hook(input, acc) ?? acc;
+    }, { output: input.output });
+  }
 }
