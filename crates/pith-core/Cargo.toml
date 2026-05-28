@@ -10,3 +10,7 @@ description = "Pith core engine for prompt/token distillation"
 [lib]
 name = "pith_core"
 path = "src/lib.rs"
+
+[dependencies]
+regex = "1"
+serde = { version = "1", features = ["derive"] }

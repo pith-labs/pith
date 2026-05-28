@@ -59,7 +59,7 @@ fn main() -> Result<()> {
         }
         Commands::Dev { text } | Commands::Shrink { text } => {
             let input = read_text_arg_or_stdin(text)?;
-            let result = engine.optimize_dev_output(&input);
+            let result = engine.optimize_dev_output(&input, None);
             println!("{}", result.output);
         }
         Commands::Run { cmd, args } | Commands::Exec { cmd, args } => {
@@ -70,7 +70,7 @@ fn main() -> Result<()> {
             let mut text = String::new();
             text.push_str(&String::from_utf8_lossy(&output.stdout));
             text.push_str(&String::from_utf8_lossy(&output.stderr));
-            let result = engine.optimize_dev_output(&text);
+            let result = engine.optimize_dev_output(&text, None);
             println!("{}", result.output);
             if !output.status.success() {
                 std::process::exit(output.status.code().unwrap_or(1));
