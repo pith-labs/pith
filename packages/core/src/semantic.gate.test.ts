@@ -48,7 +48,7 @@ for (const c of cases) {
   const op = generateOpcodeFromIR(ir, c.input, true);
   assert.ok(op.length > 12);
   assert.match(op, /(a:|ACT=)/);
-  assert.match(op, /(pl:|P=pl:)/);
+  assert.match(op, /(pl:.*@v1|P=pl:.*@v1)/);
 }
 
 console.log('semantic gate passed');
