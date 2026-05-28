@@ -1,3 +1,4 @@
+mod adapters;
 mod ai_language;
 mod dev_output;
 mod constants;
@@ -16,7 +17,7 @@ mod weights;
 
 pub use dev_output::DevOutputOptions;
 pub use engine::PithEngine;
-pub use eval::{evaluate_records, EvalReport, FeedbackRecord};
+pub use eval::{evaluate_records, EvalReport, FeedbackRecord, KindEval};
 pub use ir::{generate_machine_prompt, parse_intent_ir};
 pub use opcode::{compute_flags, generate_opcode_from_ir, isa_crc};
 pub use types::{

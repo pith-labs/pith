@@ -1,9 +1,9 @@
+use crate::adapters::run_adapter;
 use crate::ai_language::build_ai_language_frame;
 use crate::dev_output::{dev_output_pipeline, DevOutputOptions};
 use crate::input_router::{detect_input_kind, InputKind};
 use crate::ir::{generate_machine_prompt, parse_intent_ir};
 use crate::opcode::generate_opcode_from_ir;
-use crate::pipelines::{compress_pipeline, conversational_pipeline, query_pipeline};
 use crate::types::{Mode, OptimizeOptions, OptimizeResult, PithMeta, PithResultV1, StableOptimizeOptions};
 use regex::Regex;
 use std::time::Instant;
@@ -33,11 +33,12 @@ impl PithEngine {
             options.mode
         };
 
-        let (raw_output, noise_removed) = match mode {
-            Mode::Compress => compress_pipeline(trimmed, options.ultra_compact),
-            Mode::Conversational => conversational_pipeline(trimmed, options.ultra_compact),
-            Mode::Query | Mode::Auto => query_pipeline(trimmed, options.ultra_compact),
+        let execution_kind = match mode {
+            Mode::Compress => InputKind::Logs,
+            Mode::Conversational => InputKind::Chat,
+            Mode::Query | Mode::Auto => kind,
         };
+        let (raw_output, noise_removed) = run_adapter(execution_kind, trimmed, options.ultra_compact);
         let ir = parse_intent_ir(trimmed);
         let ai_frame = build_ai_language_frame(kind, &ir, trimmed);
         let output = if mode == Mode::Compress {
