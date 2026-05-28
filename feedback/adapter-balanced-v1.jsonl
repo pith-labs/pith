@@ -1,0 +1,12 @@
+{"input":"Refactor backend API route to classify retryable and non-retryable failures and keep idempotency in worker queue.","expected_contains":["retry","idempot"],"mode":"query"}
+{"input":"Review API contract changes and ensure backward compatibility with existing clients.","expected_contains":["api","compat"],"mode":"query"}
+{"input":"Contexto\nTemos eventos duplicados no worker\nObjetivo\nGarantir idempotência e reduzir reprocessamentos\nEscopo\nAjustar classificação de falhas e política de retry/DLQ","expected_contains":["retry","dlq"],"mode":"query"}
+{"input":"Spec\nGoal\nPreserve semantic meaning while reducing token density\nAcceptance Criteria\nOutput must be JSON and include risk notes","expected_contains":["json","risk"],"mode":"query"}
+{"input":"Context\nService emits duplicate webhooks\nScope\nImplement idempotency guard and retry policy\nAcceptance Criteria\nNo duplicate side effects","expected_contains":["idempot","retry"],"mode":"query"}
+{"input":"```rust\nfn classify_error(code: u16) -> bool { code >= 500 }\n```\nGenerate Rust-safe improvement and keep code format.","expected_contains":["rust","code"],"mode":"query"}
+{"input":"class PaymentService { async process(tx){ return tx.id } }\nRefactor preserving behavior and output code.","expected_contains":["code","refactor"],"mode":"query"}
+{"input":"diff --git a/src/worker.rs b/src/worker.rs\n@@ -10,7 +10,7 @@\n- retry_limit = 3\n+ retry_limit = 5\n+ dlq_enabled = true\n","expected_contains":["retry","dlq"],"mode":"compress"}
+{"input":"diff --git a/src/api.ts b/src/api.ts\n@@ -1,4 +1,4 @@\n- export const timeout = 1000\n+ export const timeout = 2500\n","expected_contains":["diff","timeout"],"mode":"compress"}
+{"input":"2026-05-28T12:00:01Z INFO booting service\n2026-05-28T12:00:02Z WARN queue lag high\n2026-05-28T12:00:03Z ERROR failed to connect redis\nTraceback: connection timeout\n","expected_contains":["error","timeout"],"mode":"dev"}
+{"input":"running 120 tests\n...\nFAIL auth::it_retries\nAssertionError expected retry_count=3 got 1\nstack trace line\n","expected_contains":["fail","retry"],"mode":"dev"}
+{"input":"User: can we reduce tokens?\nAssistant: yes, but keep constraints.\nUser: and preserve negation?\nAssistant: absolutely.","expected_contains":["negation","constraints"],"mode":"conversational"}
