@@ -1,5 +1,6 @@
 import { buildOpcode, computeFlags, type OpcodeMode } from './engine/opcode.js';
 import type { IntentIR } from './ir.js';
+import { buildDomainPlan, serializeDomainPlan } from './domainPlanner.js';
 
 function pickModeFromIR(ir: IntentIR): OpcodeMode {
   if (ir.signals.hasQuestion) return 'Q';
@@ -17,6 +18,8 @@ export function generateOpcodeFromIR(ir: IntentIR, originalText: string, ultraCo
   for (const q of ir.slots.quality) attrs.push(`?${q}`);
 
   const payloadParts: string[] = [];
+  const plan = buildDomainPlan(ir);
+  payloadParts.push(`pl:${serializeDomainPlan(plan)}`);
   if (ir.slots.runtime.length) payloadParts.push(`rt:${ir.slots.runtime.join(',')}`);
   if (ir.slots.transport.length) payloadParts.push(`tr:${ir.slots.transport.join(',')}`);
   if (ir.slots.storage.length) payloadParts.push(`db:${ir.slots.storage.join(',')}`);
