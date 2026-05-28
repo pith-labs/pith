@@ -1,0 +1,13 @@
+[package]
+name = "pith"
+version = "1.0.0"
+edition = "2021"
+description = "Pith terminal wrapper (Node-backed)"
+license = "MIT"
+repository = "https://github.com/AngeloCastro9/Pith"
+homepage = "https://github.com/AngeloCastro9/Pith"
+readme = "README.md"
+
+[[bin]]
+name = "pith"
+path = "src/main.rs"

@@ -55,9 +55,13 @@ brew install pith
 
 `cargo`:
 
-```text
-Not available yet (Pith CLI is currently Node-based). A Rust wrapper crate can be added later if needed.
+```bash
+cargo install --git https://github.com/AngeloCastro9/Pith pith
 ```
+
+`cargo` notes:
+- installs a Rust wrapper binary
+- requires Node.js in `PATH` to run the bundled Pith CLI engine
 
 Basic usage:
 
