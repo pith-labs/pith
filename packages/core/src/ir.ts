@@ -7,6 +7,12 @@ export type IntentIR = {
     entities: string[];
     confidence: number;
   };
+  slots: {
+    runtime: string[];
+    transport: string[];
+    storage: string[];
+    quality: string[];
+  };
   constraints: {
     preserveNegation: boolean;
     outputFormat: 'text' | 'json' | 'list' | 'code';
@@ -43,6 +49,21 @@ const DOMAIN_PATTERNS: Array<[RegExp, string]> = [
   [/\b(sql|postgres|database|db|migration)\b/i, 'data'],
   [/\b(llm|prompt|tokens?|openai|claude)\b/i, 'llm'],
 ];
+
+const SLOT_PATTERNS = {
+  runtime: [
+    /\b(node|nodejs|bun|deno|python|java|rust|go)\b/gi,
+  ],
+  transport: [
+    /\b(http|grpc|kafka|sqs|queue|rabbitmq|websocket)\b/gi,
+  ],
+  storage: [
+    /\b(postgres|mysql|redis|sqlite|mongodb|s3|dynamodb)\b/gi,
+  ],
+  quality: [
+    /\b(idempotency|idempotencia|idempotência|retry|dlq|latency|p99|throughput|coverage)\b/gi,
+  ],
+} as const;
 
 const ACTION_PRIORITIES: Record<string, number> = {
   refactor: 10,
@@ -132,6 +153,27 @@ function pickMaxLength(text: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function pickSlots(text: string): IntentIR['slots'] {
+  const source = text.toLowerCase();
+  const slots: IntentIR['slots'] = {
+    runtime: [],
+    transport: [],
+    storage: [],
+    quality: [],
+  };
+  for (const key of Object.keys(SLOT_PATTERNS) as Array<keyof typeof SLOT_PATTERNS>) {
+    const values = new Set<string>();
+    for (const re of SLOT_PATTERNS[key]) {
+      for (const m of source.matchAll(re)) {
+        const val = slugToken(m[0] ?? '');
+        if (val) values.add(val);
+      }
+    }
+    slots[key] = Array.from(values).slice(0, 8);
+  }
+  return slots;
+}
+
 export function parseIntentIR(text: string): IntentIR {
   const trimmed = text.trim();
   const action = pickAction(trimmed);
@@ -152,6 +194,7 @@ export function parseIntentIR(text: string): IntentIR {
       entities: pickEntities(trimmed),
       confidence: Number(confidence.toFixed(2)),
     },
+    slots: pickSlots(trimmed),
     constraints: {
       preserveNegation: /\b(n[aã]o|not|never|sem)\b/i.test(trimmed),
       outputFormat: detectOutputFormat(trimmed),

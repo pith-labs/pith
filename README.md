@@ -21,6 +21,7 @@ Key APIs:
 - `optimizeDevOutput(text, options)` for terminal/test-log distillation.
 - `parseIntentIR(text)` to extract structured intent representation.
 - `generateMachinePrompt(ir)` to produce compact machine-oriented directives.
+- `generateOpcodeFromIR(ir, originalText)` for deterministic opcode generation from semantic IR.
 
 ## Quick Start
 

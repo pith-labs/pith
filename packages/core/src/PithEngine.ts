@@ -4,6 +4,7 @@ import { isaCrc } from './engine/opcode.js';
 import type { PithPlugin, PithPluginHooks } from './plugins.js';
 import type { PithResultV1, StableOptimizeOptions } from './types.js';
 import { generateMachinePrompt, parseIntentIR } from './ir.js';
+import { generateOpcodeFromIR } from './irOpcode.js';
 
 export type OptimizeOptions = {
   ultraCompact?: boolean;
@@ -51,6 +52,7 @@ export class PithEngine {
     const legacy = this.optimize(text, options);
     const ir = parseIntentIR(text);
     const machinePrompt = generateMachinePrompt(ir);
+    const irOpcode = generateOpcodeFromIR(ir, text, options.ultraCompact ?? true);
     const endedAt = Date.now();
     const explanations: string[] = [];
     if (options.explain) {
@@ -68,6 +70,7 @@ export class PithEngine {
       isQuery: legacy.isQuery,
       ir,
       machinePrompt,
+      irOpcode,
       meta: {
         elapsedMs: Math.max(0, endedAt - startedAt),
         explain: explanations,

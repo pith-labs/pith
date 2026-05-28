@@ -8,6 +8,8 @@ assert.ok(c1.intent.domain.includes('async-processing'));
 assert.equal(c1.constraints.outputFormat, 'json');
 assert.equal(c1.constraints.preserveNegation, true);
 assert.ok(c1.intent.confidence >= 0.5);
+assert.ok(c1.intent.domain.includes('backend') || c1.slots.transport.includes('queue') || c1.slots.transport.includes('sqs'));
+assert.ok(c1.slots.quality.includes('retry') || c1.slots.quality.includes('dlq'));
 
 const c2 = parseIntentIR('Inclua idempotency e evitar markdown.');
 assert.ok(c2.constraints.mustInclude.includes('idempotency'));

@@ -13,6 +13,7 @@ export type PithResultV1 = {
   isQuery: boolean;
   ir: IntentIR;
   machinePrompt: string;
+  irOpcode: string;
   meta: {
     elapsedMs: number;
     explain: string[];

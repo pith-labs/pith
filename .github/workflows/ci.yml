@@ -16,5 +16,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run -w @pith/core test
+      - run: npx tsx packages/core/src/semantic.gate.test.ts
       - run: npm run -w @pith/core benchmark
       - run: npm run -w @pith/cli build

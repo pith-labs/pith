@@ -15,9 +15,13 @@ assert.equal(typeof stable.ir.intent.action, 'string');
 assert.ok(Array.isArray(stable.ir.intent.domain));
 assert.ok(Array.isArray(stable.ir.intent.domainScores));
 assert.equal(typeof stable.ir.intent.confidence, 'number');
+assert.ok(Array.isArray(stable.ir.slots.runtime));
+assert.ok(Array.isArray(stable.ir.slots.transport));
 assert.equal(typeof stable.machinePrompt, 'string');
 assert.match(stable.machinePrompt, /act=/);
 assert.match(stable.machinePrompt, /conf=/);
+assert.equal(typeof stable.irOpcode, 'string');
+assert.match(stable.irOpcode, /(m:|M=)/);
 
 const pluginEngine = new PithEngine([
   {
