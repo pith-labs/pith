@@ -1,0 +1,14 @@
+# Default owners
+* @angelocastro
+
+# Core engine requires maintainer review
+/packages/core/ @angelocastro
+
+# CLI ownership
+/packages/cli/ @angelocastro
+
+# Governance and CI
+/.github/ @angelocastro
+/README.md @angelocastro
+/CONTRIBUTING.md @angelocastro
+/RELEASE.md @angelocastro
