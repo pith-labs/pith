@@ -30,19 +30,28 @@ pub fn evaluate_records(engine: &PithEngine, records: &[FeedbackRecord]) -> Eval
     let mut compression_acc = 0.0f32;
 
     for r in records {
-        let mode = match r.mode.as_deref() {
-            Some("compress") => Mode::Compress,
-            Some("conversational") => Mode::Conversational,
-            Some("query") => Mode::Query,
-            _ => Mode::Auto,
+        let out = if matches!(r.mode.as_deref(), Some("dev") | Some("shrink")) {
+            let d = engine.optimize_dev_output(&r.input, None);
+            crate::types::OptimizeResult {
+                output: d.output,
+                noise_removed: d.noise_removed,
+                is_query: false,
+            }
+        } else {
+            let mode = match r.mode.as_deref() {
+                Some("compress") => Mode::Compress,
+                Some("conversational") => Mode::Conversational,
+                Some("query") => Mode::Query,
+                _ => Mode::Auto,
+            };
+            engine.optimize(
+                &r.input,
+                OptimizeOptions {
+                    ultra_compact: true,
+                    mode,
+                },
+            )
         };
-        let out = engine.optimize(
-            &r.input,
-            OptimizeOptions {
-                ultra_compact: true,
-                mode,
-            },
-        );
 
         let lower = out.output.to_lowercase();
         if r.expected_contains.iter().all(|x| lower.contains(&x.to_lowercase())) {

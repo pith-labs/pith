@@ -1,0 +1,10 @@
+{"input":"Refactor backend API route to classify retryable and non-retryable failures and keep idempotency in worker queue.","expected_contains":["retry","idempot"],"mode":"query"}
+{"input":"Implement DLQ strategy with dead-letter routing and safe requeue policy for transient errors.","expected_contains":["dlq","retry"],"mode":"query"}
+{"input":"Explain how to reduce prompt token usage while preserving semantic fidelity and output JSON.","expected_contains":["token","json"],"mode":"query"}
+{"input":"Generate code snippet in Rust for parsing webhook payload and validating signature.","expected_contains":["rust","code"],"mode":"query"}
+{"input":"Fix flaky tests in CI and improve coverage guard for regression suite.","expected_contains":["test","coverage"],"mode":"query"}
+{"input":"Implement postgres migration with rollback plan and schema compatibility checks.","expected_contains":["migration","postgres"],"mode":"query"}
+{"input":"Contexto\nTemos eventos duplicados no worker\nObjetivo\nGarantir idempotência e reduzir reprocessamentos sem perder rastreabilidade\nEscopo\nAjustar classificação de falhas e política de retry/DLQ","expected_contains":["retry","dlq"],"mode":"query"}
+{"input":"Review API contract changes and ensure backward compatibility with existing clients.","expected_contains":["api","contract"],"mode":"query"}
+{"input":"Compress this long meeting transcript into a minimal technical action list with priorities.","expected_contains":["compress"],"mode":"compress"}
+{"input":"Please summarize terminal output and keep only errors, failed tests, and stack traces.","expected_contains":["fail"],"mode":"dev"}

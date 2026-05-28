@@ -1,10 +1,44 @@
 use crate::constants::{compress_threshold, is_adjective_suffix, max_query_niches, query_threshold};
 use crate::morphology::{is_infinitive_candidate, is_nominal_likely_shape};
 use crate::opcode::{build_opcode, compute_flags};
+use crate::ir::parse_intent_ir;
 use crate::shared::{build_freq_map, fuse_proper_nouns, pick_verbal_action, score_filter_lines, score_word, ScoredWord};
 use crate::text_layers::{abbreviate, human_noise_layer, pattern_layer, preserve_layer, restore_and_clean};
 use regex::Regex;
 use std::collections::HashSet;
+
+fn canonical_action_hint(text: &str) -> Option<String> {
+    let checks = [
+        (r"(?i)\b(refactor|refatore|refatorar)\b", "refactor"),
+        (r"(?i)\b(fix|corrigir|corrija|consertar)\b", "fix"),
+        (r"(?i)\b(explain|explicar|explique)\b", "explain"),
+        (r"(?i)\b(implement|implementar|implemente)\b", "implement"),
+        (r"(?i)\b(generate|gerar|criar|create)\b", "generate"),
+        (r"(?i)\b(review|revisar|analise|analisar)\b", "review"),
+        (r"(?i)\b(compress|compressão|compactar|resumir|summarize)\b", "compress"),
+    ];
+    for (re, act) in checks {
+        if Regex::new(re).expect("valid regex").is_match(text) {
+            return Some(act.to_string());
+        }
+    }
+    None
+}
+
+fn signal_attrs_from_text(text: &str) -> Vec<String> {
+    let lower = text.to_lowercase();
+    let mut out = Vec::new();
+    if lower.contains("json") {
+        out.push("?json".to_string());
+    }
+    if lower.contains("code") || lower.contains("typescript") || lower.contains("javascript") || lower.contains("python") || lower.contains("rust") {
+        out.push("?code".to_string());
+    }
+    if lower.contains("rust") {
+        out.push("?rust".to_string());
+    }
+    out
+}
 
 pub fn compress_pipeline(text: &str, ultra_compact: bool) -> (String, usize) {
     let cleaned = human_noise_layer(text);
@@ -74,6 +108,9 @@ pub fn conversational_pipeline(text: &str, ultra_compact: bool) -> (String, usiz
 
     let fused = fuse_proper_nouns(&survivors);
     let (mut action, action_keys) = pick_verbal_action(&fused, &freq, total_words);
+    if let Some(force_action) = canonical_action_hint(text) {
+        action = format!("!{force_action}");
+    }
     let mut niches = Vec::new();
     let mut entities = Vec::new();
     let mut attrs = Vec::new();
@@ -100,7 +137,21 @@ pub fn conversational_pipeline(text: &str, ultra_compact: bool) -> (String, usiz
     niches.sort_by(|a, b| b.1.cmp(&a.1));
     let top_niches = niches.into_iter().take(max_query_niches()).map(|x| x.0).collect::<Vec<_>>();
     let flags = compute_flags(text);
-    let final_output = build_opcode("V", action.trim_start_matches('!'), "_", "_", "_", &top_niches, &entities, &attrs[..attrs.len().min(3)], "_", &flags, ultra_compact);
+    let mut all_attrs = attrs;
+    all_attrs.extend(signal_attrs_from_text(text));
+    let final_output = build_opcode(
+        "V",
+        action.trim_start_matches('!'),
+        "_",
+        "_",
+        "_",
+        &top_niches,
+        &entities,
+        &all_attrs[..all_attrs.len().min(4)],
+        "_",
+        &flags,
+        ultra_compact,
+    );
 
     let output_word_count = final_output.split_whitespace().count();
     let noise = if original_word_count > 0 {
@@ -155,7 +206,13 @@ pub fn query_pipeline(text: &str, ultra_compact: bool) -> (String, usize) {
     let mut attrs = Vec::new();
     let mut seen = HashSet::new();
 
+    let ir = parse_intent_ir(text);
     let (mut action, action_keys) = pick_verbal_action(&fused, &freq, total_words);
+    if let Some(force_action) = canonical_action_hint(text) {
+        action = format!("!{force_action}");
+    } else if !ir.intent.action.is_empty() {
+        action = format!("!{}", ir.intent.action);
+    }
     for item in fused {
         let key = item.word.to_lowercase();
         if !seen.insert(key.clone()) { continue; }
@@ -175,9 +232,39 @@ pub fn query_pipeline(text: &str, ultra_compact: bool) -> (String, usize) {
     }
 
     niches.sort_by(|a, b| b.1.cmp(&a.1));
-    let top_niches = niches.into_iter().take(max_query_niches()).map(|x| x.0).collect::<Vec<_>>();
+    let mut forced_signals: Vec<String> = Vec::new();
+    forced_signals.extend(ir.slots.quality.clone());
+    forced_signals.extend(ir.slots.storage.clone());
+    forced_signals.extend(ir.slots.transport.clone());
+    forced_signals.extend(ir.constraints.must_include.clone());
+    forced_signals.extend(ir.intent.domain.clone());
+    let lower_text = text.to_lowercase();
+    for s in forced_signals {
+        let t = s.to_lowercase();
+        if t.is_empty() {
+            continue;
+        }
+        if lower_text.contains(&t)
+            || (t == "backend" && lower_text.contains("api"))
+            || (t == "data" && lower_text.contains("migration"))
+            || (t == "async-processing" && (lower_text.contains("retry") || lower_text.contains("dlq")))
+        {
+            niches.push((format!("#{t}"), 999));
+        }
+    }
+
+    niches.sort_by(|a, b| b.1.cmp(&a.1));
+    let top_niches = niches.into_iter().map(|x| x.0).collect::<Vec<_>>();
+    let mut dedup = std::collections::HashSet::new();
+    let top_niches = top_niches
+        .into_iter()
+        .filter(|n| dedup.insert(n.clone()))
+        .take(max_query_niches())
+        .collect::<Vec<_>>();
     let flags = compute_flags(text);
-    let final_output = build_opcode("Q", action.trim_start_matches('!'), "_", "_", "_", &top_niches, &entities, &attrs, "_", &flags, ultra_compact);
+    let mut all_attrs = attrs;
+    all_attrs.extend(signal_attrs_from_text(text));
+    let final_output = build_opcode("Q", action.trim_start_matches('!'), "_", "_", "_", &top_niches, &entities, &all_attrs, "_", &flags, ultra_compact);
 
     let output_word_count = final_output.split_whitespace().count();
     let noise = if original_word_count > 0 {

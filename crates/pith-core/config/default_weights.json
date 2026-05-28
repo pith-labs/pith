@@ -1,8 +1,8 @@
 {
   "thresholds": {
-    "query": 5,
+    "query": 4,
     "compress": 4,
-    "max_query_niches": 4
+    "max_query_niches": 6
   },
   "morphology": {
     "adjective_suffixes": ["ário","ária","oso","osa","ivo","iva","ável","ível","inho","inha","ante","ente","udo","uda","ary","ous","ive","able","ible","ful","less","ical","ial","ular","ural","olar","lear","quer","quier","ico","ica"],
