@@ -1,4 +1,4 @@
-use crate::constants::{is_adjective_suffix, COMPRESS_THRESHOLD, MAX_QUERY_NICHES, QUERY_THRESHOLD};
+use crate::constants::{compress_threshold, is_adjective_suffix, max_query_niches, query_threshold};
 use crate::morphology::{is_infinitive_candidate, is_nominal_likely_shape};
 use crate::opcode::{build_opcode, compute_flags};
 use crate::shared::{build_freq_map, fuse_proper_nouns, pick_verbal_action, score_filter_lines, score_word, ScoredWord};
@@ -13,7 +13,7 @@ pub fn compress_pipeline(text: &str, ultra_compact: bool) -> (String, usize) {
     let patterned = pattern_layer(&preserved);
     let freq = build_freq_map(&patterned);
     let total_words = patterned.split_whitespace().count();
-    let filtered = score_filter_lines(&patterned, &freq, total_words, COMPRESS_THRESHOLD);
+    let filtered = score_filter_lines(&patterned, &freq, total_words, compress_threshold());
     let abbreviated = abbreviate(&filtered);
     let final_text = restore_and_clean(&abbreviated, &preserve_map).trim().to_string();
 
@@ -98,7 +98,7 @@ pub fn conversational_pipeline(text: &str, ultra_compact: bool) -> (String, usiz
     }
 
     niches.sort_by(|a, b| b.1.cmp(&a.1));
-    let top_niches = niches.into_iter().take(MAX_QUERY_NICHES).map(|x| x.0).collect::<Vec<_>>();
+    let top_niches = niches.into_iter().take(max_query_niches()).map(|x| x.0).collect::<Vec<_>>();
     let flags = compute_flags(text);
     let final_output = build_opcode("V", action.trim_start_matches('!'), "_", "_", "_", &top_niches, &entities, &attrs[..attrs.len().min(3)], "_", &flags, ultra_compact);
 
@@ -142,7 +142,7 @@ pub fn query_pipeline(text: &str, ultra_compact: bool) -> (String, usize) {
         }
 
         let score = score_word(w, &freq, total_words, i == 0, sentence_starts.contains(&i), is_question);
-        if score >= QUERY_THRESHOLD {
+        if score >= query_threshold() {
             let token = if negate_next { format!("~{clean}") } else { clean };
             survivors.push(ScoredWord { word: token, score, orig_idx: i });
             negate_next = false;
@@ -175,7 +175,7 @@ pub fn query_pipeline(text: &str, ultra_compact: bool) -> (String, usize) {
     }
 
     niches.sort_by(|a, b| b.1.cmp(&a.1));
-    let top_niches = niches.into_iter().take(MAX_QUERY_NICHES).map(|x| x.0).collect::<Vec<_>>();
+    let top_niches = niches.into_iter().take(max_query_niches()).map(|x| x.0).collect::<Vec<_>>();
     let flags = compute_flags(text);
     let final_output = build_opcode("Q", action.trim_start_matches('!'), "_", "_", "_", &top_niches, &entities, &attrs, "_", &flags, ultra_compact);
 

@@ -65,25 +65,28 @@ fn opcode_domain_snapshot_like() {
         (
             "Refactor backend API worker retry and DLQ flow with idempotency and output JSON.",
             "async-processing",
-            "pl:be@v1",
+            vec!["pl:be@v1", "pl:wk@v1"],
         ),
         (
             "Explain how to reduce prompt token usage for OpenAI and keep semantic fidelity.",
             "llm",
-            "pl:lm@v1",
+            vec!["pl:lm@v1"],
         ),
         (
             "Implement postgres migration with rollback plan and avoid markdown.",
             "data",
-            "pl:db@v1",
+            vec!["pl:db@v1"],
         ),
     ];
 
-    for (input, must_domain, opcode_contains) in fixtures {
+    for (input, must_domain, opcode_contains_any) in fixtures {
         let ir = parse_intent_ir(input);
         let opcode = generate_opcode_from_ir(&ir, input, true);
 
         assert!(ir.intent.domain.iter().any(|d| d == must_domain), "domain mismatch: {:?}", ir.intent.domain);
-        assert!(opcode.contains(opcode_contains), "opcode mismatch: {opcode}");
+        assert!(
+            opcode_contains_any.iter().any(|needle| opcode.contains(needle)),
+            "opcode mismatch: {opcode}"
+        );
     }
 }

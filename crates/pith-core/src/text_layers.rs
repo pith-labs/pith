@@ -75,7 +75,7 @@ pub fn abbreviate(text: &str) -> String {
     let re = Regex::new(r"\b[a-zA-ZÀ-ÿ]{7,}\b").expect("valid regex");
     re.replace_all(text, |caps: &regex::Captures| {
         let w = caps.get(0).map(|m| m.as_str()).unwrap_or_default();
-        abbrev(&w.to_lowercase()).unwrap_or(w).to_string()
+        abbrev(&w.to_lowercase()).unwrap_or_else(|| w.to_string())
     })
     .to_string()
 }

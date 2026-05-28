@@ -17,3 +17,4 @@ clap.workspace = true
 walkdir.workspace = true
 chrono.workspace = true
 pith-core = { path = "../pith-core" }
+serde_json = "1"
