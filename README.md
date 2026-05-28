@@ -26,10 +26,26 @@ curl -fsSL https://raw.githubusercontent.com/pith-labs/pith/main/install.sh | ba
 ## CLI
 
 ```bash
-pith prompt "How can I reduce token usage safely?"
-pith dev < build.log
+# Query/Prompt
+pith q "How can I reduce token usage safely?"
+
+# Compress / Conversational
+pith c "long structural text..."
+pith v "User: ...\nAssistant: ..."
+
+# Log/output mode (RTK-like)
 pith run cargo test
+pith log < build.log
+
+# Output controls
+pith q "Explain and output JSON" --plain
+pith q "Explain and output JSON" --json
+pith c "diff --git ..." --stats
+
+# Knowledge export
 pith brain ./notes --out pith-brain.md
+
+# Benchmark loop
 pith feedback record --input "Refactor retry worker" --contains retry,idempotency --mode query
 pith feedback eval --input feedback/records.jsonl
 ```
