@@ -1,6 +1,6 @@
-type OpcodeMode = 'Q' | 'V' | 'C';
+export type OpcodeMode = 'Q' | 'V' | 'C';
 
-type OpcodeData = {
+export type OpcodeData = {
   stance?: string;
   tag?: string;
   action?: string;

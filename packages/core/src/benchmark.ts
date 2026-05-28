@@ -19,7 +19,7 @@ const elapsed = Date.now() - start;
 console.log(
   JSON.stringify(
     {
-      schemaVersion: '1.0.0',
+      schemaVersion: '1.1.0',
       cases: cases.length,
       elapsedMs: elapsed,
       avgElapsedMs: Number((elapsed / cases.length).toFixed(2)),

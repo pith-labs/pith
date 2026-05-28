@@ -3,6 +3,8 @@ import { devOutputPipeline, type DevOutputOptions } from './engine/devOutput.js'
 import { isaCrc } from './engine/opcode.js';
 import type { PithPlugin, PithPluginHooks } from './plugins.js';
 import type { PithResultV1, StableOptimizeOptions } from './types.js';
+import { generateMachinePrompt, parseIntentIR } from './ir.js';
+import { generateOpcodeFromIR } from './irOpcode.js';
 
 export type OptimizeOptions = {
   ultraCompact?: boolean;
@@ -48,19 +50,27 @@ export class PithEngine {
     const startedAt = Date.now();
     const mode = options.mode && options.mode !== 'auto' ? options.mode : this.detectMode(text);
     const legacy = this.optimize(text, options);
+    const ir = parseIntentIR(text);
+    const machinePrompt = generateMachinePrompt(ir);
+    const irOpcode = generateOpcodeFromIR(ir, text, options.ultraCompact ?? true);
     const endedAt = Date.now();
     const explanations: string[] = [];
     if (options.explain) {
       explanations.push(`mode=${mode}`);
       explanations.push(`isQuery=${legacy.isQuery}`);
       explanations.push(`noiseRemoved=${legacy.noiseRemoved}`);
+      explanations.push(`ir.action=${ir.intent.action}`);
+      explanations.push(`ir.format=${ir.constraints.outputFormat}`);
     }
     return {
-      schemaVersion: '1.0.0',
+      schemaVersion: '1.1.0',
       mode,
       output: legacy.output,
       noiseRemoved: legacy.noiseRemoved,
       isQuery: legacy.isQuery,
+      ir,
+      machinePrompt,
+      irOpcode,
       meta: {
         elapsedMs: Math.max(0, endedAt - startedAt),
         explain: explanations,

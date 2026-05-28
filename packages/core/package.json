@@ -5,7 +5,7 @@
   "types": "src/index.ts",
   "type": "module",
   "scripts": {
-    "test": "npx tsx src/pithEngine.fixtures.test.ts && npx tsx src/pithEngine.contract.test.ts",
+    "test": "npx tsx src/pithEngine.fixtures.test.ts && npx tsx src/pithEngine.contract.test.ts && npx tsx src/ir.semantic.test.ts && npx tsx src/domainPlanner.test.ts && npx tsx src/semantic.gate.test.ts && npx tsx src/irOpcode.snapshots.test.ts",
     "benchmark": "npx tsx src/benchmark.ts"
   },
   "devDependencies": {
