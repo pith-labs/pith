@@ -157,6 +157,42 @@ fn eval_feedback(engine: &PithEngine, input: PathBuf) -> Result<()> {
         "total={} passed_contains={} contains_score={:.3} avg_compression_ratio={:.3}",
         report.total, report.passed_contains, report.contains_score, report.avg_compression_ratio
     );
+    for (idx, rec) in records.iter().enumerate() {
+        let mode = rec.mode.clone().unwrap_or_else(|| "auto".to_string());
+        let output = if matches!(rec.mode.as_deref(), Some("dev") | Some("shrink")) {
+            engine.optimize_dev_output(&rec.input, None).output
+        } else {
+            let m = match rec.mode.as_deref() {
+                Some("compress") => Mode::Compress,
+                Some("conversational") => Mode::Conversational,
+                Some("query") => Mode::Query,
+                _ => Mode::Auto,
+            };
+            engine
+                .optimize(
+                    &rec.input,
+                    OptimizeOptions {
+                        ultra_compact: true,
+                        mode: m,
+                    },
+                )
+                .output
+        };
+        let lower = output.to_lowercase();
+        let ok = rec
+            .expected_contains
+            .iter()
+            .all(|x| lower.contains(&x.to_lowercase()));
+        if !ok {
+            println!(
+                "failed_case={} mode={} expected={:?} output={}",
+                idx + 1,
+                mode,
+                rec.expected_contains,
+                output
+            );
+        }
+    }
     Ok(())
 }
 

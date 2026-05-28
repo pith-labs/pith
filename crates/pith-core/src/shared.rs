@@ -113,7 +113,9 @@ pub fn fuse_proper_nouns(items: &[ScoredWord]) -> Vec<ScoredWord> {
     let mut result = Vec::new();
     let mut i = 0usize;
     while i < items.len() {
-        if items[i].word.chars().next().is_some_and(|c| c.is_uppercase()) {
+        let is_cap = items[i].word.chars().next().is_some_and(|c| c.is_uppercase());
+        let is_all_caps = items[i].word.chars().all(|c| !c.is_alphabetic() || c.is_uppercase());
+        if is_cap && !(items[i].orig_idx == 0 && !is_all_caps) {
             let mut fused = items[i].word.clone();
             let mut max_score = items[i].score;
             let mut last = items[i].orig_idx;
