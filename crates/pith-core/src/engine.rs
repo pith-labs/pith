@@ -1,4 +1,6 @@
+use crate::ai_language::build_ai_language_frame;
 use crate::dev_output::{dev_output_pipeline, DevOutputOptions};
+use crate::input_router::{detect_input_kind, InputKind};
 use crate::ir::{generate_machine_prompt, parse_intent_ir};
 use crate::opcode::generate_opcode_from_ir;
 use crate::pipelines::{compress_pipeline, conversational_pipeline, query_pipeline};
@@ -24,16 +26,24 @@ impl PithEngine {
             };
         }
 
+        let kind = detect_input_kind(trimmed);
         let mode = if options.mode == Mode::Auto {
-            self.detect_mode(trimmed)
+            self.default_mode_for_kind(kind).unwrap_or_else(|| self.detect_mode(trimmed))
         } else {
             options.mode
         };
 
-        let (output, noise_removed) = match mode {
+        let (raw_output, noise_removed) = match mode {
             Mode::Compress => compress_pipeline(trimmed, options.ultra_compact),
             Mode::Conversational => conversational_pipeline(trimmed, options.ultra_compact),
             Mode::Query | Mode::Auto => query_pipeline(trimmed, options.ultra_compact),
+        };
+        let ir = parse_intent_ir(trimmed);
+        let ai_frame = build_ai_language_frame(kind, &ir, trimmed);
+        let output = if mode == Mode::Compress {
+            raw_output
+        } else {
+            format!("{ai_frame}::{raw_output}")
         };
 
         OptimizeResult {
@@ -45,7 +55,11 @@ impl PithEngine {
 
     pub fn optimize_stable(&self, text: &str, options: StableOptimizeOptions) -> PithResultV1 {
         let started = Instant::now();
-        let mode = options.mode.unwrap_or_else(|| self.detect_mode(text));
+        let kind = detect_input_kind(text);
+        let mode = options
+            .mode
+            .or_else(|| self.default_mode_for_kind(kind))
+            .unwrap_or_else(|| self.detect_mode(text));
         let legacy = self.optimize(
             text,
             OptimizeOptions {
@@ -56,6 +70,7 @@ impl PithEngine {
         let ir = parse_intent_ir(text);
         let machine_prompt = generate_machine_prompt(&ir);
         let ir_opcode = generate_opcode_from_ir(&ir, text, options.ultra_compact.unwrap_or(true));
+        let ai_language = build_ai_language_frame(kind, &ir, text);
 
         let mut explain = Vec::new();
         if options.explain {
@@ -75,6 +90,8 @@ impl PithEngine {
             ir,
             machine_prompt,
             ir_opcode,
+            ai_language,
+            input_kind: kind.as_str().to_string(),
             meta: PithMeta {
                 elapsed_ms: started.elapsed().as_millis(),
                 explain,
@@ -138,6 +155,16 @@ impl PithEngine {
             return Mode::Query;
         }
         top_mode
+    }
+
+    fn default_mode_for_kind(&self, kind: InputKind) -> Option<Mode> {
+        match kind {
+            InputKind::Logs => Some(Mode::Compress),
+            InputKind::Diff => Some(Mode::Compress),
+            InputKind::Chat => Some(Mode::Conversational),
+            InputKind::Prompt | InputKind::Spec | InputKind::Code => Some(Mode::Query),
+            InputKind::Generic => None,
+        }
     }
 
     fn has_strong_compress_evidence(&self, text: &str, words: usize, non_empty_lines: usize, has_question: bool, looks_like_spec: bool) -> bool {

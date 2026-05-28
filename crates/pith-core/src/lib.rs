@@ -1,8 +1,10 @@
+mod ai_language;
 mod dev_output;
 mod constants;
 mod domain;
 mod engine;
 mod eval;
+mod input_router;
 mod ir;
 mod morphology;
 mod opcode;
@@ -46,6 +48,8 @@ mod tests {
         assert_eq!(out.schema_version, "1.1.0");
         assert!(!out.machine_prompt.is_empty());
         assert!(!out.ir_opcode.is_empty());
+        assert!(out.ai_language.starts_with("AIF/1|"));
+        assert!(!out.input_kind.is_empty());
         assert!(out.meta.explain.iter().any(|e| e.starts_with("ir.action=")));
     }
 
