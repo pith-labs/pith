@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use pith_core::{Mode, OptimizeOptions, PithEngine};
+use pith_core::{evaluate_records, FeedbackRecord, Mode, OptimizeOptions, PithEngine};
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -45,6 +45,28 @@ enum Commands {
         #[arg(long, default_value = ".md,.mdc,.txt")]
         ext: String,
     },
+    Feedback {
+        #[command(subcommand)]
+        command: FeedbackCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum FeedbackCommands {
+    Record {
+        #[arg(long)]
+        input: String,
+        #[arg(long)]
+        contains: String,
+        #[arg(long)]
+        mode: Option<String>,
+        #[arg(long, default_value = "feedback/records.jsonl")]
+        out: PathBuf,
+    },
+    Eval {
+        #[arg(long, default_value = "feedback/records.jsonl")]
+        input: PathBuf,
+    },
 }
 
 fn main() -> Result<()> {
@@ -84,8 +106,57 @@ fn main() -> Result<()> {
         } => {
             run_brain(&engine, root.unwrap_or_else(|| PathBuf::from(".")), out, max_file_bytes, &ext)?;
         }
+        Commands::Feedback { command } => match command {
+            FeedbackCommands::Record {
+                input,
+                contains,
+                mode,
+                out,
+            } => {
+                record_feedback(input, contains, mode, out)?;
+            }
+            FeedbackCommands::Eval { input } => {
+                eval_feedback(&engine, input)?;
+            }
+        },
     }
 
+    Ok(())
+}
+
+fn record_feedback(input: String, contains: String, mode: Option<String>, out: PathBuf) -> Result<()> {
+    let record = FeedbackRecord {
+        input,
+        expected_contains: contains.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
+        mode,
+    };
+    if let Some(parent) = out.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let line = serde_json::to_string(&record)?;
+    use std::io::Write;
+    let mut f = fs::OpenOptions::new().create(true).append(true).open(&out)?;
+    writeln!(f, "{line}")?;
+    println!("recorded feedback into {}", out.display());
+    Ok(())
+}
+
+fn eval_feedback(engine: &PithEngine, input: PathBuf) -> Result<()> {
+    let content = fs::read_to_string(&input).with_context(|| format!("cannot read {}", input.display()))?;
+    let mut records = Vec::new();
+    for (idx, line) in content.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let rec: FeedbackRecord = serde_json::from_str(line)
+            .with_context(|| format!("invalid JSONL at line {}", idx + 1))?;
+        records.push(rec);
+    }
+    let report = evaluate_records(engine, &records);
+    println!(
+        "total={} passed_contains={} contains_score={:.3} avg_compression_ratio={:.3}",
+        report.total, report.passed_contains, report.contains_score, report.avg_compression_ratio
+    );
     Ok(())
 }
 
