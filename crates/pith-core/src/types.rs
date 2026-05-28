@@ -54,6 +54,8 @@ pub struct PithResultV1 {
     pub ir: IntentIR,
     pub machine_prompt: String,
     pub ir_opcode: String,
+    pub ai_language: String,
+    pub input_kind: String,
     pub meta: PithMeta,
 }
 

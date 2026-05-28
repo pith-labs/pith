@@ -157,6 +157,12 @@ fn eval_feedback(engine: &PithEngine, input: PathBuf) -> Result<()> {
         "total={} passed_contains={} contains_score={:.3} avg_compression_ratio={:.3}",
         report.total, report.passed_contains, report.contains_score, report.avg_compression_ratio
     );
+    for (kind, k) in &report.by_kind {
+        println!(
+            "kind={} total={} passed_contains={} contains_score={:.3}",
+            kind, k.total, k.passed_contains, k.contains_score
+        );
+    }
     for (idx, rec) in records.iter().enumerate() {
         let mode = rec.mode.clone().unwrap_or_else(|| "auto".to_string());
         let output = if matches!(rec.mode.as_deref(), Some("dev") | Some("shrink")) {

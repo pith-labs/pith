@@ -47,6 +47,12 @@ cargo build --release --workspace
 - `crates/pith-cli`: terminal application
 - `crates/pith-core/config/default_weights.json`: externalized heuristic/domain weights
 
+## AI-First Input Layer
+
+- Input is routed through structural adapters (`prompt`, `spec`, `code`, `logs`, `diff`, `chat`).
+- Stable output now includes an AI-oriented intermediate representation (`AIF/1`) to keep semantics explicit for downstream models.
+- Lexical rules remain fallback only; routing and shaping prioritize structure + intent signals.
+
 ## Open Source
 
 - PRs are welcome.

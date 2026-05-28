@@ -1,8 +1,11 @@
+mod adapters;
+mod ai_language;
 mod dev_output;
 mod constants;
 mod domain;
 mod engine;
 mod eval;
+mod input_router;
 mod ir;
 mod morphology;
 mod opcode;
@@ -14,7 +17,7 @@ mod weights;
 
 pub use dev_output::DevOutputOptions;
 pub use engine::PithEngine;
-pub use eval::{evaluate_records, EvalReport, FeedbackRecord};
+pub use eval::{evaluate_records, EvalReport, FeedbackRecord, KindEval};
 pub use ir::{generate_machine_prompt, parse_intent_ir};
 pub use opcode::{compute_flags, generate_opcode_from_ir, isa_crc};
 pub use types::{
@@ -46,6 +49,8 @@ mod tests {
         assert_eq!(out.schema_version, "1.1.0");
         assert!(!out.machine_prompt.is_empty());
         assert!(!out.ir_opcode.is_empty());
+        assert!(out.ai_language.starts_with("AIF/1|"));
+        assert!(!out.input_kind.is_empty());
         assert!(out.meta.explain.iter().any(|e| e.starts_with("ir.action=")));
     }
 
