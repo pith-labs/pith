@@ -25,7 +25,7 @@ fn detect_language_hint(text: &str) -> String {
 }
 
 fn detect_output_format(text: &str) -> String {
-    if Regex::new(r"\bjson\b").expect("valid regex").is_match(text) {
+    if Regex::new(r"(?i)\bjson\b").expect("valid regex").is_match(text) {
         return "json".to_string();
     }
     if text.contains("```") || Regex::new(r"\b(code|typescript|javascript|python|rust)\b").expect("valid regex").is_match(text) {
@@ -41,13 +41,13 @@ fn detect_output_format(text: &str) -> String {
 
 fn pick_action(text: &str) -> String {
     let patterns = [
-        (r"\b(refactor|refatore|refatorar)\b", "refactor"),
-        (r"\b(fix|corrigir|corrija|consertar)\b", "fix"),
-        (r"\b(explain|explicar|explique)\b", "explain"),
-        (r"\b(implement|implementar|implemente)\b", "implement"),
-        (r"\b(generate|gerar|criar|create)\b", "generate"),
-        (r"\b(optimi[sz]e|otimizar|otimize|compress)\b", "optimize"),
-        (r"\b(analy[sz]e|analisar|analise|review)\b", "analyze"),
+        (r"(?i)\b(refactor|refatore|refatorar)\b", "refactor"),
+        (r"(?i)\b(fix|corrigir|corrija|consertar)\b", "fix"),
+        (r"(?i)\b(explain|explicar|explique)\b", "explain"),
+        (r"(?i)\b(implement|implementar|implemente)\b", "implement"),
+        (r"(?i)\b(generate|gerar|criar|create)\b", "generate"),
+        (r"(?i)\b(optimi[sz]e|otimizar|otimize|compress)\b", "optimize"),
+        (r"(?i)\b(analy[sz]e|analisar|analise|review)\b", "analyze"),
     ];
 
     for (re, action) in patterns {
@@ -162,8 +162,8 @@ pub fn parse_intent_ir(text: &str) -> IntentIR {
     let domain_scores = score_domains(trimmed);
     let domains = domain_scores.iter().map(|d| d.name.clone()).collect::<Vec<_>>();
     let entities = pick_entities(trimmed);
-    let must_include = pick_by_directive(trimmed, r"\b(must include|include|incluir|inclua)\s+([a-z0-9_\-/]+)");
-    let must_avoid = pick_by_directive(trimmed, r"\b(without|avoid|sem|evitar)\s+([a-z0-9_\-/]+)");
+    let must_include = pick_by_directive(trimmed, r"(?i)\b(must include|include|incluir|inclua)\s+([a-z0-9_\-/]+)");
+    let must_avoid = pick_by_directive(trimmed, r"(?i)\b(without|avoid|sem|evitar)\s+([a-z0-9_\-/]+)");
     let signal_score = usize::from(trimmed.contains('?'))
         + usize::from(!domain_scores.is_empty())
         + usize::from(!entities.is_empty())
