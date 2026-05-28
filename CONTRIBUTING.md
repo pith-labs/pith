@@ -1,33 +1,28 @@
 # Contributing to Pith
 
-Thanks for helping improve Pith.
+Thanks for contributing.
 
-## Ground Rules
+## Workflow
 
-- Keep pull requests focused and small.
+- Create a feature branch (`feature/...` or `bugfix/...`).
+- Keep PRs focused and small.
 - Add or update tests for behavior changes.
-- Prefer backwards-compatible changes in `@pith/core`.
-- Use clear commit messages.
+- Open a PR using the repository template.
 
 ## Local Setup
 
 ```bash
-npm install
-npm run -w @pith/core test
-npm run -w @pith/core benchmark
+cargo test --workspace
+cargo build --release --workspace
 ```
 
-## Pull Request Checklist
+## Project Scope
 
-- Explain what changed and why.
-- Link the related issue.
-- Include before/after behavior notes.
-- Confirm tests pass locally.
-- Keep PR scope focused (avoid mixing refactor + feature + release changes).
-- Highlight any impact on `optimizeStable` schema/behavior.
+- `crates/pith-core`: core engine
+- `crates/pith-cli`: CLI interface
 
-## Engine Guidelines
+## Quality Bar
 
-- Preserve semantic intent over aggressive compression.
-- Avoid destructive transformations on code blocks, URLs, and identifiers.
-- Treat `optimizeStable` as a public contract.
+- CI must pass.
+- No force-push to `main`.
+- Keep behavior deterministic where possible.

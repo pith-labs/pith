@@ -13,16 +13,15 @@ permissions:
   contents: read
 
 jobs:
-  core-and-cli:
+  rust:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run -w @pith/core test
-      - run: npx tsx packages/core/src/semantic.gate.test.ts
-      - run: npm run -w @pith/core benchmark
-      - run: npm run -w @pith/cli build
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --workspace
+      - name: Build
+        run: cargo build --release --workspace

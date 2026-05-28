@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version for @pith/cli (e.g. 1.1.0)"
+        description: "Version for pith CLI (e.g. 2.1.0)"
         required: true
 
 permissions:
@@ -15,23 +15,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run -w @pith/core test
-      - run: npm run -w @pith/cli build
-      - name: Update cli package version
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --workspace
+      - name: Build release binary
+        run: cargo build --release -p pith
+      - name: Update CLI crate version
         run: |
-          node -e "const fs=require('fs');const p='packages/cli/package.json';const j=JSON.parse(fs.readFileSync(p,'utf8'));j.version='${{ github.event.inputs.version }}';fs.writeFileSync(p, JSON.stringify(j,null,2)+'\\n');"
+          sed -i 's/^version\.workspace = true$/version = "${{ github.event.inputs.version }}"/' crates/pith-cli/Cargo.toml
       - name: Commit and tag
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git add packages/cli/package.json
+          git add crates/pith-cli/Cargo.toml
           git commit -m "release(cli): v${{ github.event.inputs.version }}"
           git tag cli-v${{ github.event.inputs.version }}
           git push origin HEAD
@@ -40,5 +39,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: cli-v${{ github.event.inputs.version }}
-          name: "@pith/cli v${{ github.event.inputs.version }}"
+          name: "pith CLI v${{ github.event.inputs.version }}"
+          files: target/release/pith
           generate_release_notes: true
