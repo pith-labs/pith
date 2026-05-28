@@ -23,9 +23,21 @@ npm run -w @pith/core benchmark
 - Link the related issue.
 - Include before/after behavior notes.
 - Confirm tests pass locally.
+- Keep PR scope focused (avoid mixing refactor + feature + release changes).
+- Highlight any impact on `optimizeStable` schema/behavior.
 
 ## Engine Guidelines
 
 - Preserve semantic intent over aggressive compression.
 - Avoid destructive transformations on code blocks, URLs, and identifiers.
 - Treat `optimizeStable` as a public contract.
+
+## Branch Protection (Recommended)
+
+Enable on `main`:
+
+- Require pull request before merging.
+- Require approvals (minimum 1).
+- Require status checks:
+  - `core-and-cli`
+- Dismiss stale approvals on new commits.
