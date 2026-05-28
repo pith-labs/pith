@@ -1,54 +1,60 @@
-# Pith
+# Pith Engine
 
-O **Pith** é uma extensão inteligente para Google Chrome e editor de código que age como um compressor e destilador de prompts para modelos de IA. Seu objetivo principal é remover a "gordura" (palavras de preenchimento, polidez desnecessária e redundâncias) dos seus textos, enviando para a Inteligência Artificial apenas a intenção central e os dados essenciais.
+Pith is an open-source prompt distillation engine designed to reduce token waste while preserving intent.  
+The project is now engine-first: `@pith/core` is the primary product, while web and extension surfaces are integration layers.
 
-Com o Pith, você obtém respostas mais diretas, economiza tokens e se comunica com as IAs seguindo padrões lógicos de alta densidade (o *Zero-G Protocol*).
+## Why Pith
 
-## ✨ Principais Funcionalidades
+- No giant banned-word dictionaries.
+- Heuristic scoring with context-aware preservation.
+- Stable output contract for app integrations.
+- Plugin-ready architecture for iterative community contributions.
 
-- **Modo Invisível (Auto-Compressão):** Pode interceptar e comprimir o texto instantaneamente quando você clica em "Enviar" ou aperta Enter em plataformas suportadas (Chrome).
-- **Destilação em Tempo Real:** Mostra visualmente quanto "ruído" foi removido da sua mensagem antes do envio.
-- **Zero "Word Lists":** O motor do Pith (`PithEngine`) não usa dicionários gigantes de "palavras proibidas". Em vez disso, pontua palavras usando heurísticas como frequência, comprimento, posição, uso de maiúsculas e sufixos morfológicos.
-- **Proteção de Contexto:** Código (```` ``` ````), URLs, chaves complexas e nomes de variáveis (`$var`, `{{var}}`) são isolados do processo de compressão e mantidos 100% intactos.
+## Core Package
 
-## 💻 VS Code (Antigravity) Extension
+`packages/core` contains the prompt engine used by all clients.
 
-O Pith também possui uma extensão oficial para **VS Code / Antigravity**, utilizando o mesmo coração `PithEngine`. 
+Key APIs:
 
-1. Acesse a pasta `vscode-extension/` no repositório.
-2. Lá dentro foi gerado o pacote instalado `pith-vscode-1.0.0.vsix`.
-3. No seu editor, vá em **Extensions > Install from VSIX...** e instale esse arquivo (ou apenas clique com o botão direito no arquivo VSIX > Install Extension VSIX).
-4. Para usar, selecione um texto, pressione **`Cmd+Shift+L`** (macOS) ou `Ctrl+Shift+L` (Linux/Windows) para otimizar qualquer texto selecionado no seu editor!
+- `optimize(text, options)` for default optimization flow.
+- `optimizeStable(text, options)` for a versioned response contract.
+- `optimizeDevOutput(text, options)` for terminal/test-log distillation.
 
-## ⚙️ Como funciona o PithEngine?
+## Quick Start
 
-O coração do Pith possui dois pipelines principais de raciocínio, dependendo do que você está digitando:
+```bash
+npm install
+npm run -w @pith/core test
+npm run -w @pith/core benchmark
+npm run -w @pith/cli build
+```
 
-### 1. Pipeline de Extração Simbólica (Query Mode)
-Utilizado em prompts menores e diretos, converte instruções conversacionais em representações simbólicas puras: `[tag] !ação #nicho @entidade ?atributo`.
+Basic usage:
 
-Ele também detecta sua intenção principal usando as seguintes **Tags Zero-G**:
-- `[tk]` (Task) → Tarefas e ações.
-- `[an]` (Analyze) → Pedidos de análise ou revisão.
-- `[op]` (Optimize) → Pedidos para refatorar ou melhorar.
-- `[ex]` (Explain) → Dúvidas e explicações.
-- `[gen]` (Generate) → Criação ou geração de conteúdo/código.
-- `[fx]` (Fix) → Correção de bugs ou erros.
-- `[sm]` (Summarize) → Criação de resumos.
-- `[st]` (Study/Learn) → Planos de estudo ou aprendizado.
-- `[id]` (Idea) → Ideias ou sugestões.
+```ts
+import { PithEngine } from '@pith/core';
 
-### 2. Pipeline de Compressão (Text Mode)
-Ideal para textos mais longos ou contextos colados pelo usuário. Ele:
-- Isola elementos intocáveis.
-- Aplica transformações estruturais (ex: *VIP/Premiere/Stage* vira `[VIP|Pre|Sta]`).
-- Filtra semanticamente o texto linha a linha com base no *score* ponderado de cada palavra.
-- Abrevia termos comuns (ex: *desenvolvimento* vira `dev`, *configuração* vira `config`).
+const engine = new PithEngine();
+const result = engine.optimizeStable('How do I make this worker idempotent?', { explain: true });
+console.log(result.output, result.meta.explain);
+```
 
-## 🛠️ Instalação para Desenvolvimento (Google Chrome)
+CLI usage:
 
-1. Instale as dependências com `npm install`.
-2. Gere o build da extensão com `npm run build`.
-3. Abra o Google Chrome e acesse `chrome://extensions/`.
-4. Habilite o **Modo do Desenvolvedor** (canto superior direito).
-5. Clique em **Carregar sem compactação** (Load unpacked) e selecione a pasta `dist`.
+```bash
+node packages/cli/dist/cli.js "Please help me rewrite this long prompt into objective technical instructions"
+```
+
+## Repository Layout
+
+- `packages/core`: engine and test suites.
+- `packages/cli`: developer-facing CLI built on top of the core engine.
+
+## Open Source Workflow
+
+- Start with issues labeled for onboarding.
+- Open focused pull requests with tests.
+- Use semantic commits when possible.
+- Keep changes backward-compatible for `optimizeStable`.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).

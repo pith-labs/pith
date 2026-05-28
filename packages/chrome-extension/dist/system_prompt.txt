@@ -1,9 +1,0 @@
-I will communicate using the Zero-G Protocol (2-letter tags). Treat:
-[tk]: Task/Jira
-[an]: Analyze
-[op]: Optimize
-[ex]: Explain
-[sr]: Source Code
-[dn]: Dense Output
-[pf]: Performance
-Ignore syntax errors, focus on technical keywords and logical assignments (: , = , ->). Answer in the most token-efficient way possible.

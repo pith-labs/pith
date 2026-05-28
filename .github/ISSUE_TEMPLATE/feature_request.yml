@@ -1,0 +1,22 @@
+name: Feature request
+description: Propose an improvement for the Pith engine
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Why this matters
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and risks
+      description: Mention possible regressions or compatibility concerns.
