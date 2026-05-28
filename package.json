@@ -1,9 +1,0 @@
-{
-  "name": "pith",
-  "private": true,
-  "scripts": {
-    "test": "cargo test",
-    "build": "cargo build --release",
-    "benchmark": "echo 'Benchmark moved to Rust engine (TODO: criterion suite)'"
-  }
-}

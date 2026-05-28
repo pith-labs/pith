@@ -1,6 +1,6 @@
 # Pith
 
-Pith is an open-source token distillation engine and CLI, now fully Rust-first.
+Pith is an open-source token distillation engine and CLI, fully built in Rust.
 
 ## Install
 
@@ -28,25 +28,24 @@ curl -fsSL https://raw.githubusercontent.com/pith-labs/pith/main/install.sh | ba
 ```bash
 pith prompt "How can I reduce token usage safely?"
 pith dev < build.log
-pith run npm test
+pith run cargo test
 pith brain ./notes --out pith-brain.md
 ```
 
 ## Build & Test
 
 ```bash
-cargo test
-cargo build --release
+cargo test --workspace
+cargo build --release --workspace
 ```
 
 ## Repository Layout
 
 - `crates/pith-core`: engine implementation
 - `crates/pith-cli`: terminal application
-- `packages/*`: legacy TypeScript implementation (deprecation path)
 
 ## Open Source
 
 - PRs are welcome.
 - Keep changes small and test-covered.
-- Use the PR template and run `cargo test` before opening PRs.
+- Use the PR template and run `cargo test --workspace` before opening PRs.

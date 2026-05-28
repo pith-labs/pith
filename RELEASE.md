@@ -1,33 +1,27 @@
-# Release Process
+# Release Guide (Rust)
 
-This repository ships two developer products:
+Pith release flow is Rust-first.
 
-- `@pith/core`
-- `@pith/cli`
+## Components
 
-## Principles
-
-- SemVer for both packages.
-- Every release must pass CI.
-- Release notes are generated from merged pull requests.
+- `pith-core` crate
+- `pith` CLI crate
 
 ## Core Release
 
-1. Run `Release Core` workflow.
-2. Provide version (example: `1.1.0`).
-3. Workflow updates `packages/core/package.json`, creates tag `core-vX.Y.Z`, and opens a GitHub release.
+1. Run **Release Core** workflow.
+2. Set `version` input (e.g. `2.1.0`).
+3. Workflow updates `crates/pith-core/Cargo.toml`, tags `core-vX.Y.Z`, and creates a GitHub release.
 
 ## CLI Release
 
-1. Run `Release CLI` workflow.
-2. Provide version (example: `1.1.0`).
-3. Workflow updates `packages/cli/package.json`, creates tag `cli-vX.Y.Z`, and opens a GitHub release.
+1. Run **Release CLI** workflow.
+2. Set `version` input (e.g. `2.1.0`).
+3. Workflow updates `crates/pith-cli/Cargo.toml`, tags `cli-vX.Y.Z`, builds binary, and creates a GitHub release artifact.
 
-## Manual Validation Before Triggering
+## Pre-Release Checklist
 
 ```bash
-npm ci
-npm run -w @pith/core test
-npm run -w @pith/core benchmark
-npm run -w @pith/cli build
+cargo test --workspace
+cargo build --release --workspace
 ```
