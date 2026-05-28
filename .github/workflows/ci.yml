@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 jobs:
-  core:
+  core-and-cli:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,14 +17,4 @@ jobs:
       - run: npm ci
       - run: npm run -w @pith/core test
       - run: npm run -w @pith/core benchmark
-
-  web-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run -w pith-web build
+      - run: npm run -w @pith/cli build

@@ -26,6 +26,7 @@ Key APIs:
 npm install
 npm run -w @pith/core test
 npm run -w @pith/core benchmark
+npm run -w @pith/cli build
 ```
 
 Basic usage:
@@ -38,13 +39,16 @@ const result = engine.optimizeStable('How do I make this worker idempotent?', { 
 console.log(result.output, result.meta.explain);
 ```
 
+CLI usage:
+
+```bash
+node packages/cli/dist/cli.js "Please help me rewrite this long prompt into objective technical instructions"
+```
+
 ## Repository Layout
 
-- `packages/core`: engine and tests.
-- `packages/api`: HTTP API wrappers and routes.
-- `packages/chrome-extension`: browser integration.
-- `packages/vscode-extension`: editor integration.
-- `apps/web`: hosted product interface.
+- `packages/core`: engine and test suites.
+- `packages/cli`: developer-facing CLI built on top of the core engine.
 
 ## Open Source Workflow
 

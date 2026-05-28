@@ -1,8 +1,13 @@
 {
-  "name": "pith-monorepo",
+  "name": "pith",
   "private": true,
   "workspaces": [
-    "packages/*",
-    "apps/*"
-  ]
+    "packages/core",
+    "packages/cli"
+  ],
+  "scripts": {
+    "test": "npm run -w @pith/core test",
+    "benchmark": "npm run -w @pith/core benchmark",
+    "build": "npm run -w @pith/cli build"
+  }
 }
