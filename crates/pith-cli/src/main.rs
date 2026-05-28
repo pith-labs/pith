@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use pith_core::{evaluate_records, FeedbackRecord, Mode, OptimizeOptions, PithEngine};
+use pith_core::{evaluate_records, FeedbackRecord, Mode, OptimizeOptions, PithEngine, StableOptimizeOptions};
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -8,34 +8,44 @@ use std::process::Command;
 use walkdir::WalkDir;
 
 #[derive(Parser)]
-#[command(name = "pith", version, about = "Pith CLI (Rust)")]
+#[command(name = "pith", version, about = "Pith CLI (Rust, RTK-like)")]
 struct Cli {
+    #[arg(long, global = true)]
+    plain: bool,
+    #[arg(long, global = true)]
+    json: bool,
+    #[arg(long, global = true)]
+    stats: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct RenderOpts {
+    plain: bool,
+    json: bool,
+    stats: bool,
+}
+
 #[derive(Subcommand)]
 enum Commands {
-    Prompt {
-        text: Option<String>,
-    },
-    Opt {
-        text: Option<String>,
-    },
-    Dev {
-        text: Option<String>,
-    },
-    Shrink {
-        text: Option<String>,
-    },
-    Run {
-        cmd: String,
-        args: Vec<String>,
-    },
-    Exec {
-        cmd: String,
-        args: Vec<String>,
-    },
+    #[command(alias = "q")]
+    Prompt { text: Option<String> },
+    #[command(alias = "p")]
+    Opt { text: Option<String> },
+    #[command(alias = "log")]
+    Dev { text: Option<String> },
+    #[command(alias = "s")]
+    Shrink { text: Option<String> },
+    #[command(alias = "r")]
+    Run { cmd: String, args: Vec<String> },
+    #[command(alias = "x")]
+    Exec { cmd: String, args: Vec<String> },
+    #[command(alias = "c")]
+    Compress { text: Option<String> },
+    #[command(alias = "v")]
+    Chat { text: Option<String> },
     Brain {
         root: Option<PathBuf>,
         #[arg(short, long, default_value = "pith-brain.md")]
@@ -71,18 +81,33 @@ enum FeedbackCommands {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    let render = RenderOpts {
+        plain: cli.plain,
+        json: cli.json,
+        stats: cli.stats,
+    };
     let engine = PithEngine::new();
 
     match cli.command {
         Commands::Prompt { text } | Commands::Opt { text } => {
             let input = read_text_arg_or_stdin(text)?;
-            let result = engine.optimize(&input, OptimizeOptions::default());
-            println!("{}", result.output);
+            render_text_mode(&engine, &input, Mode::Auto, &render)?;
+        }
+        Commands::Compress { text } => {
+            let input = read_text_arg_or_stdin(text)?;
+            render_text_mode(&engine, &input, Mode::Compress, &render)?;
+        }
+        Commands::Chat { text } => {
+            let input = read_text_arg_or_stdin(text)?;
+            render_text_mode(&engine, &input, Mode::Conversational, &render)?;
         }
         Commands::Dev { text } | Commands::Shrink { text } => {
             let input = read_text_arg_or_stdin(text)?;
             let result = engine.optimize_dev_output(&input, None);
             println!("{}", result.output);
+            if render.stats {
+                eprintln!("noise_removed={}", result.noise_removed);
+            }
         }
         Commands::Run { cmd, args } | Commands::Exec { cmd, args } => {
             let output = Command::new(&cmd)
@@ -94,6 +119,9 @@ fn main() -> Result<()> {
             text.push_str(&String::from_utf8_lossy(&output.stderr));
             let result = engine.optimize_dev_output(&text, None);
             println!("{}", result.output);
+            if render.stats {
+                eprintln!("noise_removed={}", result.noise_removed);
+            }
             if !output.status.success() {
                 std::process::exit(output.status.code().unwrap_or(1));
             }
@@ -119,6 +147,42 @@ fn main() -> Result<()> {
                 eval_feedback(&engine, input)?;
             }
         },
+    }
+
+    Ok(())
+}
+
+fn render_text_mode(engine: &PithEngine, input: &str, mode: Mode, render: &RenderOpts) -> Result<()> {
+    let stable = engine.optimize_stable(
+        input,
+        StableOptimizeOptions {
+            mode: Some(mode),
+            ultra_compact: Some(true),
+            explain: render.stats,
+        },
+    );
+
+    if render.json {
+        println!("{}", serde_json::to_string(&stable)?);
+        return Ok(());
+    }
+
+    let out = if render.plain {
+        if let Some((_, rest)) = stable.output.split_once("::") {
+            rest.to_string()
+        } else {
+            stable.output.clone()
+        }
+    } else {
+        stable.output.clone()
+    };
+    println!("{}", out);
+
+    if render.stats {
+        eprintln!(
+            "mode={:?} input_kind={} noise_removed={} elapsed_ms={}",
+            stable.mode, stable.input_kind, stable.noise_removed, stable.meta.elapsed_ms
+        );
     }
 
     Ok(())
@@ -162,42 +226,6 @@ fn eval_feedback(engine: &PithEngine, input: PathBuf) -> Result<()> {
             "kind={} total={} passed_contains={} contains_score={:.3}",
             kind, k.total, k.passed_contains, k.contains_score
         );
-    }
-    for (idx, rec) in records.iter().enumerate() {
-        let mode = rec.mode.clone().unwrap_or_else(|| "auto".to_string());
-        let output = if matches!(rec.mode.as_deref(), Some("dev") | Some("shrink")) {
-            engine.optimize_dev_output(&rec.input, None).output
-        } else {
-            let m = match rec.mode.as_deref() {
-                Some("compress") => Mode::Compress,
-                Some("conversational") => Mode::Conversational,
-                Some("query") => Mode::Query,
-                _ => Mode::Auto,
-            };
-            engine
-                .optimize(
-                    &rec.input,
-                    OptimizeOptions {
-                        ultra_compact: true,
-                        mode: m,
-                    },
-                )
-                .output
-        };
-        let lower = output.to_lowercase();
-        let ok = rec
-            .expected_contains
-            .iter()
-            .all(|x| lower.contains(&x.to_lowercase()));
-        if !ok {
-            println!(
-                "failed_case={} mode={} expected={:?} output={}",
-                idx + 1,
-                mode,
-                rec.expected_contains,
-                output
-            );
-        }
     }
     Ok(())
 }
