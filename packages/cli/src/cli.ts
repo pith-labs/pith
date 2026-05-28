@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PithEngine } from '@pith/core';
 
 const engine = new PithEngine();
@@ -24,14 +25,17 @@ function help(): void {
       Lê notas (estilo Obsidian: .md, .mdc, .txt), aplica compressão por ficheiro,
       gera um único Markdown com secções por caminho. Saída predefinida: ./pith-brain.md
 
-  pith prompt | opt   < stdin
+  pith prompt | opt [texto]   (ou stdin)
       Otimiza texto de prompt (motor principal).
 
-  pith dev | shrink   < stdin
+  pith dev | shrink [texto]   (ou stdin)
       Compacta saída de terminal (logs, testes).
 
   pith run | exec <cmd...>
       Executa comando e envia stdout+stderr compactados para stdout.
+
+  pith --version
+      Mostra versão do CLI.
 `);
 }
 
@@ -215,6 +219,17 @@ async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const cmd = argv[0];
 
+  if (cmd === '--version' || cmd === '-v') {
+    try {
+      const here = dirname(fileURLToPath(import.meta.url));
+      const pkg = JSON.parse(await readFile(join(here, '..', 'package.json'), 'utf8')) as { version?: string };
+      console.log(pkg.version ?? 'dev');
+    } catch {
+      console.log('dev');
+    }
+    return;
+  }
+
   if (!cmd || cmd === '-h' || cmd === '--help') {
     help();
     if (!cmd) process.exit(1);
@@ -227,9 +242,10 @@ async function main(): Promise<void> {
   }
 
   if (cmd === 'dev' || cmd === 'shrink') {
-    const text = await readStdin();
+    const argText = argv.slice(1).join(' ').trim();
+    const text = argText || await readStdin();
     if (!text.trim()) {
-      console.error('pith dev: espera stdin (ex: npm test 2>&1 | pith dev)');
+      console.error('pith dev: espera texto por argumento ou stdin (ex: npm test 2>&1 | pith dev)');
       process.exit(1);
     }
     const r = engine.optimizeDevOutput(text);
@@ -238,9 +254,10 @@ async function main(): Promise<void> {
   }
 
   if (cmd === 'prompt' || cmd === 'opt') {
-    const text = await readStdin();
+    const argText = argv.slice(1).join(' ').trim();
+    const text = argText || await readStdin();
     if (!text.trim()) {
-      console.error('pith prompt: espera stdin');
+      console.error('pith prompt: espera texto por argumento ou stdin');
       process.exit(1);
     }
     const r = engine.optimize(text);

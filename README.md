@@ -32,6 +32,33 @@ npm run -w @pith/core benchmark
 npm run -w @pith/cli build
 ```
 
+## Install (Terminal-First)
+
+`npm` (global):
+
+```bash
+npm i -g "git+https://github.com/AngeloCastro9/Pith.git#main"
+```
+
+`curl` installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AngeloCastro9/Pith/main/scripts/install.sh | bash
+```
+
+`brew` (tap formula):
+
+```bash
+brew tap AngeloCastro9/tap
+brew install pith
+```
+
+`cargo`:
+
+```text
+Not available yet (Pith CLI is currently Node-based). A Rust wrapper crate can be added later if needed.
+```
+
 Basic usage:
 
 ```ts
@@ -45,7 +72,9 @@ console.log(result.output, result.ir, result.machinePrompt);
 CLI usage:
 
 ```bash
-node packages/cli/dist/cli.js "Please help me rewrite this long prompt into objective technical instructions"
+pith prompt "Please help me rewrite this long prompt into objective technical instructions"
+echo "npm test output..." | pith dev
+pith --help
 ```
 
 ## Repository Layout
