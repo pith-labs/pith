@@ -3,7 +3,9 @@ export type IntentIR = {
   intent: {
     action: string;
     domain: string[];
+    domainScores: Array<{ name: string; score: number }>;
     entities: string[];
+    confidence: number;
   };
   constraints: {
     preserveNegation: boolean;
@@ -42,6 +44,26 @@ const DOMAIN_PATTERNS: Array<[RegExp, string]> = [
   [/\b(llm|prompt|tokens?|openai|claude)\b/i, 'llm'],
 ];
 
+const ACTION_PRIORITIES: Record<string, number> = {
+  refactor: 10,
+  fix: 10,
+  implement: 9,
+  generate: 8,
+  optimize: 7,
+  analyze: 7,
+  explain: 6,
+};
+
+function slugToken(raw: string): string {
+  return raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32);
+}
+
 function detectLanguageHint(text: string): 'pt' | 'en' | 'es' | 'fr' | 'unknown' {
   if (/\b(que|como|para|com|não|ção|ções)\b/i.test(text)) return 'pt';
   if (/\b(the|and|with|for|how|please)\b/i.test(text)) return 'en';
@@ -64,35 +86,43 @@ function pickAction(text: string): string {
   return /\?/.test(text) ? 'explain' : 'optimize';
 }
 
-function pickDomains(text: string): string[] {
-  const out = new Set<string>();
+function scoreDomains(text: string): Array<{ name: string; score: number }> {
+  const lower = text.toLowerCase();
+  const out: Array<{ name: string; score: number }> = [];
   for (const [rx, domain] of DOMAIN_PATTERNS) {
-    if (rx.test(text)) out.add(domain);
+    if (!rx.test(text)) continue;
+    let score = 5;
+    if (domain === 'async-processing' && /\b(retry|dlq|idempot|worker)\b/i.test(text)) score += 4;
+    if (domain === 'backend' && /\b(api|endpoint|route|http)\b/i.test(text)) score += 3;
+    if (domain === 'llm' && /\b(prompt|tokens?|openai|claude|context)\b/i.test(text)) score += 3;
+    if (lower.includes(domain)) score += 1;
+    out.push({ name: domain, score });
   }
-  return Array.from(out);
+  out.sort((a, b) => b.score - a.score);
+  return out;
 }
 
 function pickEntities(text: string): string[] {
   const entities = Array.from(text.matchAll(/\b[A-Z][A-Za-z0-9_-]{2,}\b/g)).map((m) => m[0]);
-  return Array.from(new Set(entities)).slice(0, 8);
+  return Array.from(new Set(entities.map(slugToken).filter(Boolean))).slice(0, 8);
 }
 
 function pickMustInclude(text: string): string[] {
   const out = new Set<string>();
   for (const m of text.matchAll(/\b(must include|include|incluir|inclua)\s+([a-z0-9_\-/]+)/gi)) {
     const term = m[2]?.trim();
-    if (term) out.add(term.toLowerCase());
+    if (term) out.add(slugToken(term));
   }
-  return Array.from(out);
+  return Array.from(out).filter(Boolean);
 }
 
 function pickMustAvoid(text: string): string[] {
   const out = new Set<string>();
   for (const m of text.matchAll(/\b(without|avoid|sem|evitar)\s+([a-z0-9_\-/]+)/gi)) {
     const term = m[2]?.trim();
-    if (term) out.add(term.toLowerCase());
+    if (term) out.add(slugToken(term));
   }
-  return Array.from(out);
+  return Array.from(out).filter(Boolean);
 }
 
 function pickMaxLength(text: string): number | undefined {
@@ -104,12 +134,23 @@ function pickMaxLength(text: string): number | undefined {
 
 export function parseIntentIR(text: string): IntentIR {
   const trimmed = text.trim();
+  const action = pickAction(trimmed);
+  const domainScores = scoreDomains(trimmed);
+  const domain = domainScores.map((d) => d.name);
+  const signalScore =
+    (/\?/.test(trimmed) ? 1 : 0) +
+    (domainScores.length ? 1 : 0) +
+    (pickEntities(trimmed).length ? 1 : 0) +
+    (pickMustInclude(trimmed).length || pickMustAvoid(trimmed).length ? 1 : 0);
+  const confidence = Math.max(0.15, Math.min(0.99, (ACTION_PRIORITIES[action] ?? 5) / 12 + signalScore * 0.08));
   return {
     version: '0.1.0',
     intent: {
-      action: pickAction(trimmed),
-      domain: pickDomains(trimmed),
+      action,
+      domain,
+      domainScores,
       entities: pickEntities(trimmed),
+      confidence: Number(confidence.toFixed(2)),
     },
     constraints: {
       preserveNegation: /\b(n[aã]o|not|never|sem)\b/i.test(trimmed),
@@ -135,6 +176,7 @@ export function generateMachinePrompt(ir: IntentIR): string {
   parts.push(`act=${ir.intent.action}`);
   if (ir.intent.domain.length) parts.push(`dom=${ir.intent.domain.join(',')}`);
   if (ir.intent.entities.length) parts.push(`ent=${ir.intent.entities.join(',')}`);
+  parts.push(`conf=${ir.intent.confidence.toFixed(2)}`);
   parts.push(`fmt=${ir.constraints.outputFormat}`);
   if (typeof ir.constraints.maxLength === 'number') parts.push(`max=${ir.constraints.maxLength}`);
   if (ir.constraints.mustInclude.length) parts.push(`must+${ir.constraints.mustInclude.join(',')}`);

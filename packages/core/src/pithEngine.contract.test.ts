@@ -13,8 +13,11 @@ assert.equal(typeof stable.meta.elapsedMs, 'number');
 assert.ok(Array.isArray(stable.meta.explain));
 assert.equal(typeof stable.ir.intent.action, 'string');
 assert.ok(Array.isArray(stable.ir.intent.domain));
+assert.ok(Array.isArray(stable.ir.intent.domainScores));
+assert.equal(typeof stable.ir.intent.confidence, 'number');
 assert.equal(typeof stable.machinePrompt, 'string');
 assert.match(stable.machinePrompt, /act=/);
+assert.match(stable.machinePrompt, /conf=/);
 
 const pluginEngine = new PithEngine([
   {
