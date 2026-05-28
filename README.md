@@ -17,8 +17,10 @@ The project is now engine-first: `@pith/core` is the primary product, while web 
 Key APIs:
 
 - `optimize(text, options)` for default optimization flow.
-- `optimizeStable(text, options)` for a versioned response contract.
+- `optimizeStable(text, options)` for a versioned response contract (now with semantic IR + machine prompt).
 - `optimizeDevOutput(text, options)` for terminal/test-log distillation.
+- `parseIntentIR(text)` to extract structured intent representation.
+- `generateMachinePrompt(ir)` to produce compact machine-oriented directives.
 
 ## Quick Start
 
@@ -36,7 +38,7 @@ import { PithEngine } from '@pith/core';
 
 const engine = new PithEngine();
 const result = engine.optimizeStable('How do I make this worker idempotent?', { explain: true });
-console.log(result.output, result.meta.explain);
+console.log(result.output, result.ir, result.machinePrompt);
 ```
 
 CLI usage:
