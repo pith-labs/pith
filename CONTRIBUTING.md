@@ -26,4 +26,4 @@ cargo build --release --workspace
 - CI must pass.
 - No force-push to `main`.
 - Keep behavior deterministic where possible.
-- For AI-assisted edits, follow `docs/AI_CODING_SKILLS.md`.
+- For AI-assisted edits, follow `.claude/rules/*` and `.claude/skills/*` (plus `docs/AI_CODING_SKILLS.md`).
