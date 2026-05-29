@@ -14,7 +14,7 @@ cargo install --path crates/pith-cli
 
 ```bash
 brew tap pith-labs/tap
-brew install pith
+brew install pith-labs/tap/pith
 ```
 
 ### Curl (quick install)
