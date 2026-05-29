@@ -127,3 +127,39 @@ pub struct DomainPlan {
     pub focus: Vec<String>,
     pub checks: Vec<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SegmentV2 {
+    pub id: String,
+    pub role: String,
+    pub text: String,
+    pub keywords: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EdgeV2 {
+    pub from: String,
+    pub to: String,
+    pub relation: String,
+    pub score: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticGraphV2 {
+    pub nodes: Vec<SegmentV2>,
+    pub edges: Vec<EdgeV2>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationIRV2 {
+    pub version: String,
+    pub language: String,
+    pub intent: String,
+    pub entities: Vec<String>,
+    pub actions: Vec<String>,
+    pub constraints: Vec<String>,
+    pub decisions: Vec<String>,
+    pub pending: Vec<String>,
+    pub graph: SemanticGraphV2,
+    pub wire: String,
+}
