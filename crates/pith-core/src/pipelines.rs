@@ -7,12 +7,55 @@ use crate::text_layers::{abbreviate, human_noise_layer, pattern_layer, preserve_
 use regex::Regex;
 use std::collections::HashSet;
 
+fn is_entity_noise(token: &str) -> bool {
+    let t = token.to_lowercase();
+    matches!(
+        t.as_str(),
+        "contexto"
+            | "context"
+            | "dentro"
+            | "essa"
+            | "esse"
+            | "resultado"
+            | "objetivo"
+            | "escopo"
+            | "goal"
+            | "scope"
+            | "expected"
+            | "with"
+            | "without"
+            | "this"
+            | "that"
+    )
+}
+
+fn sanitize_entity_token(token: &str) -> Option<String> {
+    let t = token.trim().trim_start_matches('@').to_lowercase();
+    if t.is_empty() || is_entity_noise(&t) {
+        return None;
+    }
+    let section_markers = ["contexto", "context", "objetivo", "goal", "escopo", "scope", "resultado", "expected"];
+    for marker in section_markers {
+        if t == marker {
+            return None;
+        }
+        if t.ends_with(marker) && t.len() > marker.len() + 2 {
+            let base = t.trim_end_matches(marker).trim_matches('-').to_string();
+            if base.len() >= 3 && !is_entity_noise(&base) {
+                return Some(base);
+            }
+            return None;
+        }
+    }
+    Some(t)
+}
+
 fn canonical_action_hint(text: &str) -> Option<String> {
     let checks = [
         (r"(?i)\b(refactor|refatore|refatorar)\b", "refactor"),
         (r"(?i)\b(fix|corrigir|corrija|consertar)\b", "fix"),
         (r"(?i)\b(explain|explicar|explique)\b", "explain"),
-        (r"(?i)\b(implement|implementar|implemente)\b", "implement"),
+        (r"(?i)\b(implement|implementar|implemente|aplicar|ajustar|alterar)\b", "implement"),
         (r"(?i)\b(generate|gerar|criar|create)\b", "generate"),
         (r"(?i)\b(review|revisar|analise|analisar)\b", "review"),
         (r"(?i)\b(compress|compressão|compactar|resumir|summarize)\b", "compress"),
@@ -120,9 +163,16 @@ pub fn conversational_pipeline(text: &str, ultra_compact: bool) -> (String, usiz
         let key = item.word.to_lowercase();
         if !used.insert(key.clone()) { continue; }
         if item.word.chars().any(|c| c.is_ascii_digit()) { attrs.push(format!("?{}", item.word)); continue; }
-        if is_adjective_suffix(&key) && item.word.len() >= 8 && !key.ends_with("mente") { attrs.push(format!("?{key}")); continue; }
+        if is_adjective_suffix(&key) && item.word.len() >= 8 && !key.ends_with("mente") {
+            if text.len() < 220 {
+                attrs.push(format!("?{key}"));
+            }
+            continue;
+        }
         if item.word.chars().next().is_some_and(|c| c.is_uppercase()) && item.word.len() >= 3 && !is_infinitive_candidate(&item.word) {
-            entities.push(format!("@{}", item.word));
+            if let Some(clean) = sanitize_entity_token(&item.word) {
+                entities.push(format!("@{clean}"));
+            }
             continue;
         }
         if action_keys.contains(&key) { continue; }
@@ -231,6 +281,15 @@ pub fn query_pipeline(text: &str, ultra_compact: bool) -> (String, usize) {
         }
     }
 
+    for e in &ir.intent.entities {
+        let Some(normalized) = sanitize_entity_token(e) else {
+            continue;
+        };
+        if seen.insert(normalized.clone()) {
+            entities.push(format!("@{normalized}"));
+        }
+    }
+
     niches.sort_by(|a, b| b.1.cmp(&a.1));
     let mut forced_signals: Vec<String> = Vec::new();
     forced_signals.extend(ir.slots.quality.clone());
@@ -262,8 +321,18 @@ pub fn query_pipeline(text: &str, ultra_compact: bool) -> (String, usize) {
         .take(max_query_niches())
         .collect::<Vec<_>>();
     let flags = compute_flags(text);
-    let mut all_attrs = attrs;
+    let mut all_attrs = attrs
+        .into_iter()
+        .filter(|a| !is_entity_noise(a.trim_start_matches('?')))
+        .collect::<Vec<_>>();
     all_attrs.extend(signal_attrs_from_text(text));
+    let mut entity_seen = std::collections::HashSet::new();
+    let entities = entities
+        .into_iter()
+        .filter_map(|e| sanitize_entity_token(e.trim_start_matches('@')).map(|v| format!("@{v}")))
+        .filter(|e| entity_seen.insert(e.clone()))
+        .take(8)
+        .collect::<Vec<_>>();
     let final_output = build_opcode("Q", action.trim_start_matches('!'), "_", "_", "_", &top_niches, &entities, &all_attrs, "_", &flags, ultra_compact);
 
     let output_word_count = final_output.split_whitespace().count();

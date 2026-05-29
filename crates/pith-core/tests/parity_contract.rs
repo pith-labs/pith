@@ -48,3 +48,27 @@ fn ir_semantic_expectations() {
     assert!(prompt.contains("fmt=json"));
     assert!(prompt.contains("keep-negation"));
 }
+
+#[test]
+fn structured_multilingual_context_should_keep_business_signal() {
+    let input = r#"
+Contexto
+Dentro da frente de integração entre Gupy e ARA, existe uma necessidade específica ligada à feat cultural.
+
+Objetivo
+Aplicar a alteração do parâmetro necessária para a feat cultural dentro da integração.
+
+Escopo
+identificar o parâmetro alterado no fluxo
+ajustar comportamento da integração
+validar impacto nos pontos dependentes
+
+Resultado esperado
+A feat cultural considera corretamente a alteração do parâmetro na integração.
+"#;
+
+    let ir = parse_intent_ir(input);
+    let entities = ir.intent.entities.join(",");
+    assert!(entities.contains("integracao") || entities.contains("gupy"));
+    assert!(entities.contains("parametro") || entities.contains("cultural"));
+}
