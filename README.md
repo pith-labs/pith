@@ -14,8 +14,12 @@ cargo install --path crates/pith-cli
 
 ```bash
 brew tap pith-labs/tap
-brew install pith
+brew install pith-labs/tap/pith
 ```
+
+### Homebrew Core (target)
+
+`brew install pith` via `homebrew/core` is being prepared. Track status in `.github/HOMEBREW_CORE_SUBMISSION.md`.
 
 ### Curl (quick install)
 
