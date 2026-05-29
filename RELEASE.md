@@ -1,27 +1,30 @@
 # Release Guide (Rust)
 
-Pith release flow is Rust-first.
+Pith uses **semantic versioning** (`MAJOR.MINOR.PATCH`) with a single project release tag:
 
-## Components
+- `v2.1.0`
+- `v2.1.1`
 
-- `pith-core` crate
-- `pith` CLI crate
+## Source of Truth
 
-## Core Release
+- Workspace version: `Cargo.toml` -> `[workspace.package].version`
+- Release tag: `vX.Y.Z`
+- GitHub release title: `pith vX.Y.Z`
 
-1. Run **Release Core** workflow.
-2. Set `version` input (e.g. `2.1.0`).
-3. Workflow updates `crates/pith-core/Cargo.toml`, tags `core-vX.Y.Z`, and creates a GitHub release.
+## Release Workflow
 
-## CLI Release
+1. Open GitHub Actions and run **Release**.
+2. Set `version` (example: `2.1.0`).
+3. Workflow validates:
+   - `cargo test --workspace`
+   - `cargo run -p pith -- feedback eval --input feedback/adapter-balanced-v1.jsonl`
+   - `cargo build --release --workspace`
+4. Workflow updates workspace version, commits, creates tag `vX.Y.Z`, and publishes GitHub release with binary artifact.
 
-1. Run **Release CLI** workflow.
-2. Set `version` input (e.g. `2.1.0`).
-3. Workflow updates `crates/pith-cli/Cargo.toml`, tags `cli-vX.Y.Z`, builds binary, and creates a GitHub release artifact.
-
-## Pre-Release Checklist
+## Local Pre-Release Checklist
 
 ```bash
 cargo test --workspace
+cargo run -p pith -- feedback eval --input feedback/adapter-balanced-v1.jsonl
 cargo build --release --workspace
 ```
