@@ -26,3 +26,4 @@ cargo build --release --workspace
 - CI must pass.
 - No force-push to `main`.
 - Keep behavior deterministic where possible.
+- For AI-assisted edits, follow `docs/AI_CODING_SKILLS.md`.
