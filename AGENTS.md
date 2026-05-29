@@ -26,6 +26,8 @@ For any engine/adapter behavior change, run:
 - No unexplained metric regression in adapter eval.
 - No placeholder/mocked production behavior.
 - Branch naming must be `feature/...` or `bugfix/...`.
+- Default PR target is `develop` (GitFlow).
+- `main` receives only release-ready merges from `develop`.
 - PR template must be fully filled.
 
 ## Agent Configs
