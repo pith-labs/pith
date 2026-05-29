@@ -20,7 +20,7 @@ pub use dev_output::DevOutputOptions;
 pub use engine::PithEngine;
 pub use eval::{evaluate_records, EvalReport, FeedbackRecord, KindEval};
 pub use ir::{generate_machine_prompt, parse_intent_ir};
-pub use convo::compile_conversation_ir_v2;
+pub use convo::{compile_conversation_ir_v2, compile_conversation_ir_v2_stream};
 pub use opcode::{compute_flags, generate_opcode_from_ir, isa_crc};
 pub use types::{
     ConversationIRV2, DevOutputResult, DomainPlan, IntentIR, Mode, OptimizeOptions, OptimizeResult, PithMeta,
