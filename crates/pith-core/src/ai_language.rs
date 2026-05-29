@@ -33,7 +33,6 @@ pub fn build_ai_language_frame(kind: InputKind, ir: &IntentIR, original: &str) -
     }
     parts.push(format!("conf={:.2}", ir.intent.confidence));
 
-    // Structural signal signature (no brittle keyword list)
     let lines = original.lines().filter(|l| !l.trim().is_empty()).count();
     let symbols = original.chars().filter(|c| "{}[]()<>:=+-|".contains(*c)).count();
     parts.push(format!("sig=l{lines}:s{symbols}"));

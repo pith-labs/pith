@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use pith_core::{evaluate_records, FeedbackRecord, Mode, OptimizeOptions, PithEngine, StableOptimizeOptions};
+use pith_core::{compile_conversation_ir_v2, compile_conversation_ir_v2_stream, evaluate_records, FeedbackRecord, Mode, OptimizeOptions, PithEngine, StableOptimizeOptions};
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -46,6 +46,17 @@ enum Commands {
     Compress { text: Option<String> },
     #[command(alias = "v")]
     Chat { text: Option<String> },
+    Convo {
+        text: Option<String>,
+        #[arg(long)]
+        wire: bool,
+        #[arg(long)]
+        trace: bool,
+        #[arg(long)]
+        stream: bool,
+        #[arg(long, default_value_t = 6)]
+        window: usize,
+    },
     Brain {
         root: Option<PathBuf>,
         #[arg(short, long, default_value = "pith-brain.md")]
@@ -100,6 +111,28 @@ fn main() -> Result<()> {
         Commands::Chat { text } => {
             let input = read_text_arg_or_stdin(text)?;
             render_text_mode(&engine, &input, Mode::Conversational, &render)?;
+        }
+        Commands::Convo {
+            text,
+            wire,
+            trace,
+            stream,
+            window,
+        } => {
+            let input = read_text_arg_or_stdin(text)?;
+            let ir = if stream {
+                compile_conversation_ir_v2_stream(&input, window)
+            } else {
+                compile_conversation_ir_v2(&input)
+            };
+            if render.json || trace {
+                println!("{}", serde_json::to_string(&ir)?);
+            } else if wire || render.plain {
+                println!("{}", ir.wire);
+            } else {
+                println!("{}", ir.wire);
+                eprintln!("tip: use --trace or --json for full graph");
+            }
         }
         Commands::Dev { text } | Commands::Shrink { text } => {
             let input = read_text_arg_or_stdin(text)?;
