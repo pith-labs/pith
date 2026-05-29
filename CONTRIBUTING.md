@@ -5,6 +5,8 @@ Thanks for contributing.
 ## Workflow
 
 - Create a feature branch (`feature/...` or `bugfix/...`).
+- Open PRs to `develop` by default.
+- Merge `develop` into `main` only for release-ready changes.
 - Keep PRs focused and small.
 - Add or update tests for behavior changes.
 - Open a PR using the repository template.
