@@ -34,7 +34,7 @@ impl PithEngine {
         };
 
         let execution_kind = match mode {
-            Mode::Compress => InputKind::Logs,
+            Mode::Compress => kind,
             Mode::Conversational => InputKind::Chat,
             Mode::Query | Mode::Auto => kind,
         };
