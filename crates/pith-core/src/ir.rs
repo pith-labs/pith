@@ -3,8 +3,24 @@ use crate::constants::domain_weights;
 use regex::Regex;
 use std::collections::{BTreeSet, HashMap};
 
+fn fold_diacritics(input: &str) -> String {
+    input
+        .chars()
+        .map(|c| match c {
+            'á' | 'à' | 'ã' | 'â' | 'ä' | 'Á' | 'À' | 'Ã' | 'Â' | 'Ä' => 'a',
+            'é' | 'è' | 'ê' | 'ë' | 'É' | 'È' | 'Ê' | 'Ë' => 'e',
+            'í' | 'ì' | 'î' | 'ï' | 'Í' | 'Ì' | 'Î' | 'Ï' => 'i',
+            'ó' | 'ò' | 'õ' | 'ô' | 'ö' | 'Ó' | 'Ò' | 'Õ' | 'Ô' | 'Ö' => 'o',
+            'ú' | 'ù' | 'û' | 'ü' | 'Ú' | 'Ù' | 'Û' | 'Ü' => 'u',
+            'ç' | 'Ç' => 'c',
+            'ñ' | 'Ñ' => 'n',
+            _ => c.to_ascii_lowercase(),
+        })
+        .collect()
+}
+
 fn slug_token(raw: &str) -> String {
-    raw.to_lowercase()
+    fold_diacritics(raw)
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '-' })
         .collect::<String>()
@@ -15,12 +31,18 @@ fn slug_token(raw: &str) -> String {
 }
 
 fn detect_language_hint(text: &str) -> String {
-    let lower = text.to_lowercase();
-    if lower.contains(" não") || lower.contains("ção") || lower.contains(" como ") {
+    let lower = fold_diacritics(text);
+    if lower.contains(" nao") || lower.contains(" como ") || lower.contains(" contexto ") {
         return "pt".to_string();
     }
     if lower.contains(" the ") || lower.contains(" with ") || lower.contains(" how ") {
         return "en".to_string();
+    }
+    if lower.contains(" el ") || lower.contains(" con ") || lower.contains(" objetivo ") {
+        return "es".to_string();
+    }
+    if lower.contains(" le ") || lower.contains(" avec ") || lower.contains(" objectif ") {
+        return "fr".to_string();
     }
     "unknown".to_string()
 }
@@ -45,7 +67,7 @@ fn pick_action(text: &str) -> String {
         (r"(?i)\b(refactor|refatore|refatorar)\b", "refactor"),
         (r"(?i)\b(fix|corrigir|corrija|consertar)\b", "fix"),
         (r"(?i)\b(explain|explicar|explique)\b", "explain"),
-        (r"(?i)\b(implement|implementar|implemente)\b", "implement"),
+        (r"(?i)\b(implement|implementar|implemente|aplicar|ajustar|alterar)\b", "implement"),
         (r"(?i)\b(generate|gerar|criar|create)\b", "generate"),
         (r"(?i)\b(optimi[sz]e|otimizar|otimize|compress)\b", "optimize"),
         (r"(?i)\b(analy[sz]e|analisar|analise|review)\b", "analyze"),
@@ -65,7 +87,7 @@ fn pick_action(text: &str) -> String {
 }
 
 fn score_domains(text: &str) -> Vec<DomainScore> {
-    let lower = text.to_lowercase();
+    let lower = fold_diacritics(text);
     let tokens = lower
         .split(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_'))
         .filter(|t| !t.is_empty())
@@ -100,15 +122,37 @@ fn score_domains(text: &str) -> Vec<DomainScore> {
 }
 
 fn pick_entities(text: &str) -> Vec<String> {
-    let re = Regex::new(r"\b[A-Z][A-Za-z0-9_-]{2,}\b").expect("valid regex");
-    let mut set = BTreeSet::new();
-    for m in re.find_iter(text) {
-        let t = slug_token(m.as_str());
-        if !t.is_empty() {
-            set.insert(t);
+    let mut score: HashMap<String, i32> = HashMap::new();
+    let section_weights = extract_semantic_sections(text);
+    let stopwords = stopwords_set();
+
+    for (section, body) in section_weights {
+        let boost = match section.as_str() {
+            "goal" => 5,
+            "scope" => 4,
+            "expected" => 4,
+            "context" => 2,
+            _ => 1,
+        };
+        for token in tokenize_words(&body) {
+            if token.len() < 4 || stopwords.contains(token.as_str()) {
+                continue;
+            }
+            *score.entry(token).or_insert(0) += boost;
         }
     }
-    set.into_iter().take(8).collect()
+
+    let cap_re = Regex::new(r"\b[A-Z][A-Za-z0-9_-]{2,}\b").expect("valid regex");
+    for m in cap_re.find_iter(text) {
+        let t = slug_token(m.as_str());
+        if t.len() >= 3 {
+            *score.entry(t).or_insert(0) += 3;
+        }
+    }
+
+    let mut ranked = score.into_iter().collect::<Vec<_>>();
+    ranked.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    ranked.into_iter().map(|(k, _)| k).take(8).collect()
 }
 
 fn pick_by_directive(text: &str, pattern: &str) -> Vec<String> {
@@ -139,7 +183,7 @@ fn pick_slots(text: &str) -> Slots {
         ("quality", vec![r"\b(idempotency|idempotencia|idempotência|retry|dlq|latency|p99|throughput|coverage)\b"]),
     ]);
 
-    let source = text.to_lowercase();
+    let source = fold_diacritics(text);
     let mut out = Slots::default();
     for (k, patterns) in &mut slots {
         let mut set = BTreeSet::new();
@@ -160,6 +204,87 @@ fn pick_slots(text: &str) -> Slots {
             "quality" => out.quality = vals,
             _ => {}
         }
+    }
+    out
+}
+
+fn tokenize_words(text: &str) -> Vec<String> {
+    let folded = fold_diacritics(text);
+    folded
+        .split(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_'))
+        .filter(|t| !t.is_empty())
+        .map(slug_token)
+        .filter(|t| !t.is_empty())
+        .collect()
+}
+
+fn stopwords_set() -> BTreeSet<&'static str> {
+    [
+        // pt
+        "a", "as", "o", "os", "um", "uma", "de", "do", "da", "dos", "das", "e", "em", "no", "na",
+        "nos", "nas", "com", "sem", "para", "por", "que", "como", "dentro", "essa", "esse", "isso",
+        "objetivo", "escopo", "contexto", "resultado", "esperado",
+        // en
+        "the", "a", "an", "and", "or", "with", "without", "for", "from", "into", "this", "that",
+        "goal", "scope", "context", "expected", "result",
+        // es/fr common
+        "el", "la", "los", "las", "con", "sin", "para", "como", "objetivo", "alcance", "resultado",
+        "le", "les", "avec", "sans", "pour", "comme", "objectif", "contexte", "resultat",
+    ]
+    .into_iter()
+    .collect()
+}
+
+fn extract_semantic_sections(text: &str) -> Vec<(String, String)> {
+    let folded = fold_diacritics(text);
+    let mut out: Vec<(String, String)> = Vec::new();
+    let mut current = "generic".to_string();
+    let mut buffer = Vec::new();
+
+    let heading_kind = |line: &str| -> Option<&'static str> {
+        let t = line.trim();
+        if t.is_empty() {
+            return None;
+        }
+        let is_context = Regex::new(r"^(context|contexto|contexte)$").expect("valid regex").is_match(t);
+        let is_goal = Regex::new(r"^(goal|objetivo|objectif)$").expect("valid regex").is_match(t);
+        let is_scope = Regex::new(r"^(scope|escopo|alcance)$").expect("valid regex").is_match(t);
+        let is_expected =
+            Regex::new(r"^(resultado esperado|expected result|resultat attendu)$").expect("valid regex").is_match(t);
+        if is_context {
+            return Some("context");
+        }
+        if is_goal {
+            return Some("goal");
+        }
+        if is_scope {
+            return Some("scope");
+        }
+        if is_expected {
+            return Some("expected");
+        }
+        None
+    };
+
+    for line in folded.lines() {
+        if let Some(kind) = heading_kind(line) {
+            if !buffer.is_empty() {
+                out.push((current.clone(), buffer.join(" ")));
+                buffer.clear();
+            }
+            current = kind.to_string();
+            continue;
+        }
+        let trimmed = line.trim();
+        if !trimmed.is_empty() {
+            buffer.push(trimmed.to_string());
+        }
+    }
+    if !buffer.is_empty() {
+        out.push((current, buffer.join(" ")));
+    }
+    if out.is_empty() {
+        out.push(("generic".to_string(), folded));
     }
     out
 }
