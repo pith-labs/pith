@@ -12,19 +12,16 @@ Pith release flow is Rust-first.
 - `pith-core` crate
 - `pith` CLI crate
 
-## Core Release
+## Automatic Release
 
-1. Ensure current branch is `main` (workflow is blocked outside `main`).
-2. Run **Release Core** workflow.
-3. Set `version` input (e.g. `2.1.0`).
-4. Workflow updates `crates/pith-core/Cargo.toml`, tags `core-vX.Y.Z`, and creates a GitHub release.
+Release is automatic on `push` to `main`:
 
-## CLI Release
+1. Workflow reads `Cargo.toml` workspace version.
+2. If tag `vX.Y.Z` does not exist, it runs test + eval + build.
+3. Creates tag `vX.Y.Z`.
+4. Publishes GitHub release with the `pith` binary artifact.
 
-1. Ensure current branch is `main` (workflow is blocked outside `main`).
-2. Run **Release CLI** workflow.
-3. Set `version` input (e.g. `2.1.0`).
-4. Workflow updates `crates/pith-cli/Cargo.toml`, tags `cli-vX.Y.Z`, builds binary, and creates a GitHub release artifact.
+If the tag already exists, workflow exits without creating a duplicate release.
 
 ## Pre-Release Checklist
 

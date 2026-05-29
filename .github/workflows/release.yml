@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+      - "feedback/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  detect:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should_release: ${{ steps.tagcheck.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read workspace version
+        id: version
+        run: |
+          VERSION=$(awk '/^\[workspace\.package\]/{f=1;next} f && /^version = /{gsub(/"/,"",$3); print $3; exit}' Cargo.toml)
+          if [ -z "$VERSION" ]; then
+            echo "Could not read workspace version from Cargo.toml"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Check if tag already exists
+        id: tagcheck
+        run: |
+          if git ls-remote --tags origin "refs/tags/v${{ steps.version.outputs.version }}" | grep -q .; then
+            echo "Tag v${{ steps.version.outputs.version }} already exists; skipping release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    needs: detect
+    if: needs.detect.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Test workspace
+        run: cargo test --workspace
+      - name: Run adapter benchmark gate
+        run: cargo run -p pith -- feedback eval --input feedback/adapter-balanced-v1.jsonl
+      - name: Build release
+        run: cargo build --release --workspace
+      - name: Create tag and push
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git tag v${{ needs.detect.outputs.version }}
+          git push origin v${{ needs.detect.outputs.version }}
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.detect.outputs.version }}
+          name: "pith v${{ needs.detect.outputs.version }}"
+          files: |
+            target/release/pith
+          generate_release_notes: true
