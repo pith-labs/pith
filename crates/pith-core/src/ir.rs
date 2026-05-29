@@ -220,14 +220,11 @@ fn tokenize_words(text: &str) -> Vec<String> {
 
 fn stopwords_set() -> BTreeSet<&'static str> {
     [
-        // pt
         "a", "as", "o", "os", "um", "uma", "de", "do", "da", "dos", "das", "e", "em", "no", "na",
         "nos", "nas", "com", "sem", "para", "por", "que", "como", "dentro", "essa", "esse", "isso",
         "objetivo", "escopo", "contexto", "resultado", "esperado",
-        // en
         "the", "a", "an", "and", "or", "with", "without", "for", "from", "into", "this", "that",
         "goal", "scope", "context", "expected", "result",
-        // es/fr common
         "el", "la", "los", "las", "con", "sin", "para", "como", "objetivo", "alcance", "resultado",
         "le", "les", "avec", "sans", "pour", "comme", "objectif", "contexte", "resultat",
     ]

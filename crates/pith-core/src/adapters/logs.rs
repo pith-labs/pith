@@ -1,7 +1,6 @@
 use regex::Regex;
 
 pub fn run(text: &str, ultra_compact: bool) -> (String, usize) {
-    // Keep high-signal log lines: errors/failures/trace causes.
     let important = Regex::new(r"(?i)\b(error|fatal|panic|exception|traceback|failed|timeout|assert|refused)\b").expect("valid regex");
     let lines: Vec<&str> = text.lines().collect();
 

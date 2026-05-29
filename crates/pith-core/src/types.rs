@@ -161,5 +161,16 @@ pub struct ConversationIRV2 {
     pub decisions: Vec<String>,
     pub pending: Vec<String>,
     pub graph: SemanticGraphV2,
+    pub memory: Vec<MemoryLayerV2>,
+    pub global_summary: String,
     pub wire: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryLayerV2 {
+    pub layer: String,
+    pub unit: String,
+    pub summary: String,
+    pub entities: Vec<String>,
+    pub actions: Vec<String>,
 }
