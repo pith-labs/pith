@@ -14,8 +14,12 @@ cargo install --path crates/pith-cli
 
 ```bash
 brew tap pith-labs/tap
-brew install pith
+brew install pith-labs/tap/pith
 ```
+
+### Homebrew Core (target)
+
+`brew install pith` via `homebrew/core` is being prepared. Track status in `.github/HOMEBREW_CORE_SUBMISSION.md`.
 
 ### Curl (quick install)
 
@@ -87,3 +91,10 @@ The report prints global metrics plus per-kind quality:
 - PRs are welcome.
 - Keep changes small and test-covered.
 - Use the PR template and run `cargo test --workspace` before opening PRs.
+
+## Distribution
+
+- Stable Homebrew tap: `brew tap pith-labs/tap && brew install pith-labs/tap/pith`
+- Cargo source install: `cargo install --path crates/pith-cli`
+- Quick shell install: `curl -fsSL https://raw.githubusercontent.com/pith-labs/pith/main/install.sh | bash`
+- Homebrew Core (`brew install pith`) is in preparation and tracked in `.github/HOMEBREW_CORE_SUBMISSION.md`
