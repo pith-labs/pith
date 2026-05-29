@@ -2,6 +2,7 @@ mod adapters;
 mod ai_language;
 mod dev_output;
 mod constants;
+mod convo;
 mod domain;
 mod engine;
 mod eval;
@@ -19,10 +20,11 @@ pub use dev_output::DevOutputOptions;
 pub use engine::PithEngine;
 pub use eval::{evaluate_records, EvalReport, FeedbackRecord, KindEval};
 pub use ir::{generate_machine_prompt, parse_intent_ir};
+pub use convo::compile_conversation_ir_v2;
 pub use opcode::{compute_flags, generate_opcode_from_ir, isa_crc};
 pub use types::{
-    DevOutputResult, DomainPlan, IntentIR, Mode, OptimizeOptions, OptimizeResult, PithMeta, PithResultV1,
-    StableOptimizeOptions,
+    ConversationIRV2, DevOutputResult, DomainPlan, IntentIR, Mode, OptimizeOptions, OptimizeResult, PithMeta,
+    PithResultV1, StableOptimizeOptions,
 };
 
 #[cfg(test)]
