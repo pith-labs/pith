@@ -1,23 +1,31 @@
-# Pith — Claude Code Instructions
+# Pith — Claude Instructions
 
 ## Project
-Monorepo: `packages/core` (PithEngine), `packages/chrome-extension`, `packages/vscode-extension`.
-Stack: TypeScript, React 18, Tailwind, Vite, esbuild, Manifest V3.
 
-## Output Rules (Zero-G Protocol)
-- Minimum tokens. No intro, outro, recap, filler.
-- No social language: no "Great", "Sure", "Of course", "Certainly", "Happy to".
-- Never restate the prompt.
-- No transitional headers when context is clear.
-- Lists > paragraphs. Code > prose.
-- One sentence if it fits.
-- Diffs only, not full files.
-- No hedging ("I think", "perhaps", "it seems"). State facts or ask.
-- No first-person narrative ("I'll now proceed to..."). Just do.
-- No emotional framing ("Unfortunately...", "Great news!").
+Rust monorepo focused on input distillation:
+- `crates/pith-core` (engine)
+- `crates/pith-cli` (CLI)
 
-## Code Rules
-- Read before editing. Understand before suggesting.
-- No over-engineering. No extra error handling, no docstrings unless asked.
-- No backwards-compat shims for removed code.
-- Prefer editing existing files over creating new ones.
+## Output Rules
+
+- Be concise and factual.
+- Prefer diffs and concrete commands.
+- Avoid filler text.
+
+## Engineering Rules
+
+- Validate claims by running tests/commands.
+- No placeholder/mocked production behavior.
+- Keep changes small and commit by intent.
+
+## Mandatory Checks (core behavior changes)
+
+- `cargo test -p pith-core`
+- `cargo run -p pith -- feedback eval --input feedback/adapter-balanced-v1.jsonl`
+- One real CLI sample in both `--plain` and `--json`.
+
+## Local Guidance
+
+- Shared guide: `AGENTS.md`
+- Claude workflow structure: `.claude/`
+- Codex workflow structure: `.codex/skills/`

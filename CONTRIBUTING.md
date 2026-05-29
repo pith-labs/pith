@@ -26,3 +26,7 @@ cargo build --release --workspace
 - CI must pass.
 - No force-push to `main`.
 - Keep behavior deterministic where possible.
+- For AI-assisted edits:
+  - Claude flows: `.claude/rules/*` and `.claude/skills/*`
+  - Codex flows: `.codex/skills/*`
+  - Shared guardrails: `AGENTS.md` and `docs/AI_CODING_SKILLS.md`
