@@ -8,6 +8,8 @@ on:
       - "Cargo.lock"
       - "crates/**"
       - "feedback/**"
+      - ".github/workflows/release.yml"
+      - "RELEASE.md"
   workflow_dispatch:
 
 permissions:
