@@ -2,8 +2,8 @@
 
 Pith uses **semantic versioning** (`MAJOR.MINOR.PATCH`) with a single project release tag:
 
-- `v2.1.0`
-- `v2.1.1`
+- `v2.2.0`
+- `v2.2.1`
 
 ## GitFlow Rule
 
